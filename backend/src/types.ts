@@ -72,6 +72,9 @@ export interface GenerateArtworkRequest {
   polygon: GeoJSONPolygon;
   style: StyleName;
   sessionToken: string;
+  highwayTypes?: string[]; // OSM highway tag values to include; omit = all
+  labelOffset?: number;   // perpendicular offset of label path from street line in SVG px
+  groupMap?: Record<string, string>; // OSM highway type → group ID, e.g. { motorway: 'major' }
 }
 
 export interface GenerateArtworkResponse {
