@@ -1,4 +1,4 @@
-import { StyleOption, ProductOption } from './types.js';
+import { StyleOption, ProductOption, StreetGroupId, StreetConfig } from './types.js';
 
 export const STYLE_OPTIONS: StyleOption[] = [
   { name: 'minimal-line-art', label: 'Minimal', backgroundColor: '#ffffff', strokeColor: '#000000' },
@@ -30,3 +30,24 @@ export const PRODUCT_OPTIONS: ProductOption[] = [
 
 // Max polygon area in square degrees (~roughly 5km² depending on latitude)
 export const MAX_POLYGON_AREA_SQ_DEG = 0.001;
+
+export const STREET_GROUPS: { id: StreetGroupId; label: string; types: string[]; defaultOn: boolean }[] = [
+  { id: 'major',      label: 'Major Roads',   types: ['motorway', 'trunk', 'primary'],                 defaultOn: true  },
+  { id: 'secondary',  label: 'Secondary',     types: ['secondary', 'tertiary'],                         defaultOn: true  },
+  { id: 'local',      label: 'Local Streets', types: ['residential', 'unclassified', 'living_street'],  defaultOn: true  },
+  { id: 'pedestrian', label: 'Pedestrian',    types: ['pedestrian', 'footway', 'path'],                 defaultOn: false },
+  { id: 'cycling',    label: 'Cycling',       types: ['cycleway'],                                      defaultOn: false },
+  { id: 'service',    label: 'Service Roads', types: ['service'],                                       defaultOn: false },
+];
+
+export const DEFAULT_STREET_CONFIG: StreetConfig = {
+  enabledGroups: STREET_GROUPS.filter(g => g.defaultOn).map(g => g.id),
+  groupStyles: {
+    major:      { strokeWidth: 4,   dashStyle: 'solid',  color: null },
+    secondary:  { strokeWidth: 2.5, dashStyle: 'solid',  color: null },
+    local:      { strokeWidth: 1.5, dashStyle: 'solid',  color: null },
+    pedestrian: { strokeWidth: 1,   dashStyle: 'dotted', color: null },
+    cycling:    { strokeWidth: 1,   dashStyle: 'dashed', color: null },
+    service:    { strokeWidth: 1,   dashStyle: 'solid',  color: null },
+  },
+};
