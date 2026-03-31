@@ -23,7 +23,7 @@ describe('generateSvg', () => {
     const svg = generateSvg(sampleStreetData, 'minimal-line-art');
     expect(svg).toContain('<svg');
     expect(svg).toContain('</svg>');
-    expect(svg).toContain('<polyline');
+    expect(svg).toContain('<path');
   });
 
   it('uses the correct background color for minimal-line-art', () => {
@@ -51,9 +51,39 @@ describe('generateSvg', () => {
     expect(() => generateSvg(empty, 'minimal-line-art')).toThrow('No street data to render');
   });
 
-  it('outputs SVG with width and height of 2400', () => {
+  it('outputs SVG with correct viewBox for 2400px canvas', () => {
     const svg = generateSvg(sampleStreetData, 'minimal-line-art');
-    expect(svg).toContain('width="2400"');
-    expect(svg).toContain('height="2400"');
+    expect(svg).toContain('viewBox="0 0 2400 2400"');
+  });
+
+  it('stamps paths with road group class when groupMap provided', () => {
+    const data: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[-87.6298, 41.8781], [-87.6248, 41.8831]] },
+        properties: { highway: 'motorway' },
+      }],
+    };
+    const svg = generateSvg(data, 'minimal-line-art', 24, { motorway: 'major' });
+    expect(svg).toContain('class="road-major"');
+  });
+
+  it('falls back to road-local class when highway type not in groupMap', () => {
+    const data: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[-87.6298, 41.8781], [-87.6248, 41.8831]] },
+        properties: { highway: 'unknown_type' },
+      }],
+    };
+    const svg = generateSvg(data, 'minimal-line-art', 24, { motorway: 'major' });
+    expect(svg).toContain('class="road-local"');
+  });
+
+  it('uses road-local class when feature has no highway property', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, { motorway: 'major' });
+    expect(svg).toContain('class="road-local"');
   });
 });
