@@ -91,15 +91,18 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
       '.leaflet-draw-edit-remove',
     ) as HTMLElement | null;
 
+    // Store handler reference for cleanup
+    const trashClickHandler = (e: MouseEvent) => {
+      e.stopImmediatePropagation();
+      if (drawnItemsRef.current && drawnItemsRef.current.getLayers().length > 0) {
+        setShowDeleteModal(true);
+      }
+    };
+
     if (trashBtn) {
       trashBtn.addEventListener(
         'click',
-        (e: MouseEvent) => {
-          e.stopImmediatePropagation();
-          if (drawnItemsRef.current && drawnItemsRef.current.getLayers().length > 0) {
-            setShowDeleteModal(true);
-          }
-        },
+        trashClickHandler,
         true, // capture phase — fires before leaflet-draw's own listener
       );
     }
@@ -132,6 +135,10 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
     });
 
     return () => {
+      if (trashBtn) {
+        trashBtn.removeEventListener('click', trashClickHandler, true);
+      }
+      drawnItemsRef.current = null;
       map.remove();
       mapRef.current = null;
     };
