@@ -5,6 +5,7 @@ import { AnimatePresence } from 'motion/react';
 import { PolygonCoords } from '../types.js';
 import { MAX_POLYGON_AREA_SQ_DEG } from '../constants.js';
 import DeleteConfirmModal from './DeleteConfirmModal.js';
+import LocationSearch from './LocationSearch.js';
 
 interface Props {
   onPolygonComplete: (polygon: PolygonCoords) => void;
@@ -164,6 +165,7 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
         ref={containerRef}
         style={{ position: 'absolute', inset: 0 }}
       />
+      <LocationSearch mapRef={mapRef} />
       <AnimatePresence>
         {showDeleteModal && (
           <DeleteConfirmModal
