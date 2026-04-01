@@ -11,6 +11,23 @@ interface Props {
   className?: string;
 }
 
+function circleToPolygon(
+  center: L.LatLng,
+  radiusMeters: number,
+  numSides = 64,
+): [number, number][] {
+  const latRad = (center.lat * Math.PI) / 180;
+  const points: [number, number][] = [];
+  for (let i = 0; i < numSides; i++) {
+    const angle = (i / numSides) * 2 * Math.PI;
+    const latOffset = (radiusMeters / 111320) * Math.cos(angle);
+    const lngOffset = (radiusMeters / (111320 * Math.cos(latRad))) * Math.sin(angle);
+    points.push([center.lng + lngOffset, center.lat + latOffset]);
+  }
+  points.push(points[0]); // close ring
+  return points;
+}
+
 function computeApproxAreaSqDeg(latlngs: L.LatLng[]): number {
   // Shoelace formula on lat/lng (approximate, sufficient for area check)
   let area = 0;
@@ -51,33 +68,44 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
 
     const drawControl = new (L as unknown as { Control: { Draw: new (opts: unknown) => L.Control } }).Control.Draw({
       draw: {
-        polygon: { showArea: true },
-        polyline: false,
-        rectangle: false,
-        circle: false,
+        polygon:      { showArea: true },
+        rectangle:    { showArea: true },
+        circle:       { showRadius: true },
+        polyline:     false,
         circlemarker: false,
-        marker: false,
+        marker:       false,
       },
-      edit: { featureGroup: drawnItems },
+      edit: {
+        featureGroup: drawnItems,
+        edit:         false,  // removes the pencil button
+      },
     });
     map.addControl(drawControl);
 
     map.on(L.Draw.Event.CREATED, (e: unknown) => {
-      const event = e as { layer: L.Polygon };
+      const event = e as { layerType: string; layer: L.Layer };
       drawnItems.clearLayers();
       drawnItems.addLayer(event.layer);
 
-      const latlngs = (event.layer.getLatLngs()[0] as L.LatLng[]);
-      const area = computeApproxAreaSqDeg(latlngs);
+      let coords: [number, number][];
 
-      if (area > MAX_POLYGON_AREA_SQ_DEG) {
-        drawnItems.clearLayers();
-        onAreaTooLargeRef.current();
-        return;
+      if (event.layerType === 'circle') {
+        const circle = event.layer as L.Circle;
+        coords = circleToPolygon(circle.getLatLng(), circle.getRadius());
+      } else {
+        // polygon and rectangle both expose getLatLngs()
+        const poly = event.layer as L.Polygon;
+        const latlngs = poly.getLatLngs()[0] as L.LatLng[];
+        const area = computeApproxAreaSqDeg(latlngs);
+        if (area > MAX_POLYGON_AREA_SQ_DEG) {
+          drawnItems.clearLayers();
+          onAreaTooLargeRef.current();
+          return;
+        }
+        coords = latlngs.map(ll => [ll.lng, ll.lat] as [number, number]);
+        coords.push(coords[0]); // close ring
       }
 
-      const coords = latlngs.map(ll => [ll.lng, ll.lat] as [number, number]);
-      coords.push(coords[0]); // close ring
       onPolygonCompleteRef.current({ type: 'Polygon', coordinates: [coords] });
     });
 
