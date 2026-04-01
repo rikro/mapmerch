@@ -75,8 +75,8 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
     const drawControl = new (L as unknown as { Control: { Draw: new (opts: unknown) => L.Control } }).Control.Draw({
       draw: {
         polygon:      { showArea: true },
-        rectangle:    false,
-        circle:       { showRadius: true },
+        rectangle:    {},
+        circle:       {},
         polyline:     false,
         circlemarker: false,
         marker:       false,
@@ -87,6 +87,86 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
       },
     });
     map.addControl(drawControl);
+
+    // Replace leaflet-draw's rectangle and circle mouse handlers with standard
+    // drag interactions. Rectangle: mousedown corner → drag → mouseup corner.
+    // Circle: mousedown edge → drag → mouseup, center tracks the midpoint.
+    // Both replace _onMouseDown/_onMouseMove/_onMouseUp on the handler instance
+    // so addHooks/removeHooks (map dragging, cleanup) still run unmodified.
+    const modes = (drawControl as any)?._toolbars?.draw?._modes;
+
+    const rh = modes?.rectangle?.handler;
+    if (rh) {
+      rh._onMouseDown = function(this: any, e: L.LeafletMouseEvent) {
+        this._isDrawing = true;
+        this._startLatLng = e.latlng;
+        L.DomEvent.on(document, 'mouseup',  this._onMouseUp, this)
+                  .on(document, 'touchend', this._onMouseUp, this)
+                  .preventDefault(e.originalEvent);
+      };
+      rh._onMouseMove = function(this: any, e: L.LeafletMouseEvent) {
+        if (!this._isDrawing) return;
+        const bounds = new L.LatLngBounds(this._startLatLng, e.latlng);
+        if (!this._shape) {
+          this._shape = new L.Rectangle(bounds, this.options.shapeOptions);
+          this._map.addLayer(this._shape);
+        } else {
+          this._shape.setBounds(bounds);
+        }
+      };
+      rh._onMouseUp = function(this: any) {
+        if (!this._isDrawing) return;
+        this._isDrawing = false;
+        L.DomEvent.off(document, 'mouseup',  this._onMouseUp, this)
+                  .off(document, 'touchend', this._onMouseUp, this);
+        if (this._shape) this._fireCreatedEvent();
+        this.disable();
+        if (this.options.repeatMode) this.enable();
+      };
+    }
+
+    const ch = modes?.circle?.handler;
+    if (ch) {
+      ch._onMouseDown = function(this: any, e: L.LeafletMouseEvent) {
+        this._isDrawing = true;
+        this._startLatLng = e.latlng;
+        L.DomEvent.on(document, 'mouseup',  this._onMouseUp, this)
+                  .on(document, 'touchend', this._onMouseUp, this)
+                  .preventDefault(e.originalEvent);
+      };
+      ch._onMouseMove = function(this: any, e: L.LeafletMouseEvent) {
+        if (!this._isDrawing) return;
+        const s = this._startLatLng;
+        const c = e.latlng;
+        const center = L.latLng((s.lat + c.lat) / 2, (s.lng + c.lng) / 2);
+        const radius = center.distanceTo(c);
+        if (!this._shape) {
+          this._shape = new L.Circle(center, radius, this.options.shapeOptions);
+          this._map.addLayer(this._shape);
+        } else {
+          this._shape.setLatLng(center).setRadius(radius);
+        }
+      };
+      ch._onMouseUp = function(this: any) {
+        if (!this._isDrawing) return;
+        this._isDrawing = false;
+        L.DomEvent.off(document, 'mouseup',  this._onMouseUp, this)
+                  .off(document, 'touchend', this._onMouseUp, this);
+        if (this._shape) this._fireCreatedEvent();
+        this.disable();
+        if (this.options.repeatMode) this.enable();
+      };
+      // Built-in _fireCreatedEvent uses _startLatLng as center; use shape's
+      // actual midpoint instead.
+      ch._fireCreatedEvent = function(this: any) {
+        const circle = new L.Circle(
+          this._shape.getLatLng(),
+          this._shape.getRadius(),
+          this.options.shapeOptions,
+        );
+        this._map.fire(L.Draw.Event.CREATED, { layer: circle, layerType: this.type });
+      };
+    }
 
     const trashBtn = containerRef.current?.querySelector(
       '.leaflet-draw-edit-remove',
