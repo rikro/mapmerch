@@ -21,13 +21,19 @@ export async function generateArtwork(
   polygon: PolygonCoords,
   style: StyleName,
   sessionToken: string,
+  highwayTypes: string[],
+  labelOffset: number,
+  groupMap: Record<string, string>,
 ): Promise<GenerateArtworkResponse> {
   const res = await fetch(`${BASE_URL}/api/artwork/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ polygon, style, sessionToken }),
+    body: JSON.stringify({ polygon, style, sessionToken, highwayTypes, labelOffset, groupMap }),
   });
-  if (!res.ok) throw new Error('Artwork generation failed');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? 'Artwork generation failed');
+  }
   return res.json() as Promise<GenerateArtworkResponse>;
 }
 
