@@ -14,8 +14,15 @@ artworkRouter.post('/generate', async (req: Request, res: Response) => {
   }
 
   try {
+    const { highwayTypes, labelOffset, groupMap } = req.body as GenerateArtworkRequest;
     const streetData = await fetchStreetGeometry(polygon);
-    const svg = generateSvg(streetData, style);
+    const filtered = highwayTypes?.length
+      ? { ...streetData, features: streetData.features.filter(f => highwayTypes.includes(f.properties['highway'] as string)) }
+      : streetData;
+    if (filtered.features.length === 0) {
+      return res.status(400).json({ error: 'No streets of the selected types found in this area. Try enabling more street types.' });
+    }
+    const svg = generateSvg(filtered, style, labelOffset, groupMap ?? {});
     const draft = saveDraft(sessionToken, polygon, style, svg);
     const response: GenerateArtworkResponse = { draftId: draft.id, svg };
     return res.json(response);
