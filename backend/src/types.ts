@@ -90,3 +90,6 @@ export interface CreateOrderRequest {
   shippingAddress: ShippingAddress;
   stripePaymentIntentId: string;
 }
+
+// A single closed ring of [lng, lat] coordinate pairs describing a water body outline.
+export type WaterRing = [number, number][];

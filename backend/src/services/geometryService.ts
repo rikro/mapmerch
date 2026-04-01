@@ -1,4 +1,4 @@
-import { GeoJSONPolygon, GeoJSONFeatureCollection } from '../types.js';
+import { GeoJSONPolygon, GeoJSONFeatureCollection, WaterRing } from '../types.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const MAX_RETRIES = 3;
@@ -8,10 +8,18 @@ interface OverpassNode {
   lon: number;
 }
 
+interface OverpassMember {
+  type: string;
+  ref: number;
+  role: string;
+  geometry?: OverpassNode[];
+}
+
 interface OverpassElement {
   type: string;
   id: number;
   geometry?: OverpassNode[];
+  members?: OverpassMember[];
   tags?: Record<string, string>;
 }
 
@@ -31,6 +39,22 @@ export function toGeoJSON(overpassResponse: OverpassResponse): GeoJSONFeatureCol
       properties: (el.tags ?? {}) as Record<string, unknown>,
     }));
   return { type: 'FeatureCollection', features };
+}
+
+export function toWaterRings(overpassResponse: OverpassResponse): WaterRing[] {
+  const rings: WaterRing[] = [];
+  for (const el of overpassResponse.elements) {
+    if (el.type === 'way' && el.geometry && el.geometry.length >= 3) {
+      rings.push(el.geometry.map(({ lon, lat }) => [lon, lat] as [number, number]));
+    } else if (el.type === 'relation' && el.members) {
+      for (const member of el.members) {
+        if (member.role === 'outer' && member.geometry && member.geometry.length >= 3) {
+          rings.push(member.geometry.map(({ lon, lat }) => [lon, lat] as [number, number]));
+        }
+      }
+    }
+  }
+  return rings;
 }
 
 // ── Area-based road-density tiers ────────────────────────────────────────────
@@ -59,9 +83,9 @@ function highwayFilter(areaSqDeg: number): string {
     return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified)$"';
   }
   if (areaSqDeg < TIER_PRIMARY_SQ_DEG) {
-    return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link)$"';
+    return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$"';
   }
-  return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link)$"';
+  return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link)$"';
 }
 
 function buildOverpassQuery(polygon: GeoJSONPolygon): string {
