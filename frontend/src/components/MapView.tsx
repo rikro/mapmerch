@@ -7,6 +7,8 @@ import { MAX_POLYGON_AREA_SQ_DEG } from '../constants.js';
 interface Props {
   onPolygonComplete: (polygon: PolygonCoords) => void;
   onAreaTooLarge: () => void;
+  onShapeCleared?: () => void;
+  className?: string;
 }
 
 function computeApproxAreaSqDeg(latlngs: L.LatLng[]): number {
@@ -20,25 +22,28 @@ function computeApproxAreaSqDeg(latlngs: L.LatLng[]): number {
   return Math.abs(area) / 2;
 }
 
-export default function MapView({ onPolygonComplete, onAreaTooLarge }: Props) {
+export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeCleared, className }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   // Refs so the map event handler always calls the latest callbacks
   // without needing to re-initialize the map when they change.
   const onPolygonCompleteRef = useRef(onPolygonComplete);
   const onAreaTooLargeRef = useRef(onAreaTooLarge);
+  const onShapeClearedRef = useRef(onShapeCleared);
 
   useEffect(() => { onPolygonCompleteRef.current = onPolygonComplete; }, [onPolygonComplete]);
   useEffect(() => { onAreaTooLargeRef.current = onAreaTooLarge; }, [onAreaTooLarge]);
+  useEffect(() => { onShapeClearedRef.current = onShapeCleared; }, [onShapeCleared]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = L.map(containerRef.current).setView([41.8781, -87.6298], 14);
+    const map = L.map(containerRef.current).setView([41.2254, -85.0226], 15);
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
+    L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 20,
     }).addTo(map);
 
     const drawnItems = new L.FeatureGroup();
@@ -85,7 +90,8 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge }: Props) {
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height: '100vh' }}
+      className={className}
+      style={!className ? { width: '100%', height: '100vh' } : undefined}
       data-testid="map-view"
     />
   );

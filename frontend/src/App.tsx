@@ -143,6 +143,11 @@ export default function App() {
     setAreaError('Selected area is too large. Please draw a smaller boundary.');
   }, []);
 
+  const handleShapeCleared = useCallback(() => {
+    setPolygon(null);
+    setAreaError(null);
+  }, []);
+
   const labelOffsetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function resolvedStreetArgs(config: StreetConfig): { highwayTypes: string[]; groupMap: Record<string, string> } {
@@ -229,6 +234,7 @@ export default function App() {
           <MapView
             onPolygonComplete={handlePolygonComplete}
             onAreaTooLarge={handleAreaTooLarge}
+            onShapeCleared={handleShapeCleared}
             className="absolute inset-0 w-full h-full"
           />
 
@@ -261,9 +267,9 @@ export default function App() {
               </h3>
               <ol className="space-y-2">
                 {[
-                  'Click the polygon icon in the top-left toolbar',
-                  'Click to place boundary points around your area',
-                  'Click the first point again to close the shape',
+                  'Use the toolbar (top-left) to choose a shape: polygon, rectangle, or circle',
+                  'Draw your boundary on the map',
+                  'Use the trash icon to clear and start over',
                 ].map((s, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
                     <span className="w-4 h-4 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
