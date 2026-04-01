@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet-draw';
+import { AnimatePresence } from 'motion/react';
 import { PolygonCoords } from '../types.js';
 import { MAX_POLYGON_AREA_SQ_DEG } from '../constants.js';
+import DeleteConfirmModal from './DeleteConfirmModal.js';
 
 interface Props {
   onPolygonComplete: (polygon: PolygonCoords) => void;
@@ -47,6 +49,8 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
   const onPolygonCompleteRef = useRef(onPolygonComplete);
   const onAreaTooLargeRef = useRef(onAreaTooLarge);
   const onShapeClearedRef = useRef(onShapeCleared);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
 
   useEffect(() => { onPolygonCompleteRef.current = onPolygonComplete; }, [onPolygonComplete]);
   useEffect(() => { onAreaTooLargeRef.current = onAreaTooLarge; }, [onAreaTooLarge]);
@@ -65,6 +69,7 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
 
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
+    drawnItemsRef.current = drawnItems;
 
     const drawControl = new (L as unknown as { Control: { Draw: new (opts: unknown) => L.Control } }).Control.Draw({
       draw: {
@@ -81,6 +86,23 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
       },
     });
     map.addControl(drawControl);
+
+    const trashBtn = containerRef.current?.querySelector(
+      '.leaflet-draw-edit-remove',
+    ) as HTMLElement | null;
+
+    if (trashBtn) {
+      trashBtn.addEventListener(
+        'click',
+        (e: MouseEvent) => {
+          e.stopImmediatePropagation();
+          if (drawnItemsRef.current && drawnItemsRef.current.getLayers().length > 0) {
+            setShowDeleteModal(true);
+          }
+        },
+        true, // capture phase — fires before leaflet-draw's own listener
+      );
+    }
 
     map.on(L.Draw.Event.CREATED, (e: unknown) => {
       const event = e as { layerType: string; layer: L.Layer };
@@ -115,6 +137,16 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
     };
   }, []); // map initializes once — callbacks are accessed via refs
 
+  const handleDeleteConfirm = () => {
+    drawnItemsRef.current?.clearLayers();
+    onShapeClearedRef.current?.();
+    setShowDeleteModal(false);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
+  };
+
   return (
     <div
       className={className}
@@ -125,6 +157,14 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
         ref={containerRef}
         style={{ position: 'absolute', inset: 0 }}
       />
+      <AnimatePresence>
+        {showDeleteModal && (
+          <DeleteConfirmModal
+            onConfirm={handleDeleteConfirm}
+            onCancel={handleDeleteCancel}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
