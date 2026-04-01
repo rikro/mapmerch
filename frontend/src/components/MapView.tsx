@@ -75,7 +75,7 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
     const drawControl = new (L as unknown as { Control: { Draw: new (opts: unknown) => L.Control } }).Control.Draw({
       draw: {
         polygon:      { showArea: true },
-        rectangle:    { showArea: true },
+        rectangle:    {},
         circle:       { showRadius: true },
         polyline:     false,
         circlemarker: false,
