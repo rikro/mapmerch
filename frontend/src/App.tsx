@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import {
   RefreshCw, Plus, Minus, Map as MapIcon,
-  Search, AlertTriangle, Settings, HelpCircle,
+  AlertTriangle, Settings, HelpCircle,
   Heart, Star, Zap,
 } from 'lucide-react';
 
@@ -67,6 +67,7 @@ function applyStreetStyle(
   rawSvg: string | null,
   config: StreetConfig,
   labelTypography: TypographyConfig,
+  waterColor: string,
 ): string | null {
   if (!rawSvg) return null;
 
@@ -88,7 +89,7 @@ function applyStreetStyle(
     labelTypography.color ? `fill:${labelTypography.color}` : '',
   ].filter(Boolean).join(';');
 
-  const style = `<style>${groupRules}text{${textRules};}</style>`;
+  const style = `<style>path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}</style>`;
   return rawSvg.replace(/(<svg[^>]*>)/, `$1${style}`);
 }
 
@@ -131,7 +132,7 @@ export default function App() {
     typeface: 'Manrope', size: 18, weight: '700', color: '#1c1b1b',
   });
   const [labelTypography, setLabelTypography] = useState<TypographyConfig>({
-    typeface: 'sans-serif', size: 40, weight: '400', color: '', baselineOffset: 24,
+    typeface: 'sans-serif', size: 40, weight: '400', color: '', baselineOffset: 12,
   });
   const [coordsConfig, setCoordsConfig] = useState<CoordsConfig>({
     show: false, format: 'Decimal Degrees', position: 'bottom-left', opacity: 0.85,
@@ -139,6 +140,7 @@ export default function App() {
   const [symbolConfig, setSymbolConfig] = useState<SymbolConfig>({
     show: false, icon: 'heart', scale: 48, color: '#0050cb', opacity: 1,
   });
+  const [waterColor, setWaterColor] = useState('#bfbfbf');
 
   const handleAreaTooLarge = useCallback(() => {
     setAreaError('Area exceeds the maximum supported size. Please draw a smaller boundary.');
@@ -157,6 +159,13 @@ export default function App() {
 
   const labelOffsetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Viewport state for artwork zoom/pan
+  const [viewport, setViewport] = useState({ zoom: 1, panX: 0, panY: 0 });
+  const viewportRef = useRef({ zoom: 1, panX: 0, panY: 0 });
+  const mainRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; panX: number; panY: number } | null>(null);
+
   function resolvedStreetArgs(config: StreetConfig): { highwayTypes: string[]; groupMap: Record<string, string> } {
     const enabled = STREET_GROUPS.filter(g => config.enabledGroups.includes(g.id));
     const highwayTypes = enabled.flatMap(g => g.types);
@@ -170,8 +179,9 @@ export default function App() {
       setPolygon(p);
       setAreaError(null);
       setPolygonLargeHint(false); // will be re-set by onPolygonLarge if applicable
+      setViewport({ zoom: 1, panX: 0, panY: 0 });
       const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
-      generate(p, style, highwayTypes, labelTypography.baselineOffset ?? 24, groupMap);
+      generate(p, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap);
       setStep('customize');
     },
     [generate, style, streetConfig, labelTypography.baselineOffset],
@@ -182,7 +192,7 @@ export default function App() {
       setStyle(newStyle);
       if (polygon) {
         const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
-        generate(polygon, newStyle, highwayTypes, labelTypography.baselineOffset ?? 24, groupMap);
+        generate(polygon, newStyle, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap);
       }
     },
     [generate, polygon, streetConfig, labelTypography.baselineOffset],
@@ -194,7 +204,7 @@ export default function App() {
       setStreetConfig(next);
       if ('enabledGroups' in patch && polygon) {
         const { highwayTypes, groupMap } = resolvedStreetArgs(next);
-        generate(polygon, style, highwayTypes, labelTypography.baselineOffset ?? 24, groupMap);
+        generate(polygon, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap);
       }
     },
     [streetConfig, polygon, style, generate, labelTypography.baselineOffset],
@@ -215,6 +225,54 @@ export default function App() {
     [labelTypography, polygon, style, streetConfig, generate],
   );
 
+  // Keep viewportRef in sync for use in the non-passive wheel listener
+  useEffect(() => { viewportRef.current = viewport; }, [viewport]);
+
+  // Non-passive wheel listener for zoom centered on cursor
+  useEffect(() => {
+    if (step !== 'customize') return;
+    const el = mainRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const rect = el.getBoundingClientRect();
+      const mouseX = e.clientX - (rect.left + rect.width / 2);
+      const mouseY = e.clientY - (rect.top + rect.height / 2);
+      const { zoom: oldZoom, panX, panY } = viewportRef.current;
+      const newZoom = Math.min(50, Math.max(0.25, oldZoom * factor));
+      const scaleFactor = newZoom / oldZoom;
+      setViewport({
+        zoom: newZoom,
+        panX: mouseX - (mouseX - panX) * scaleFactor,
+        panY: mouseY - (mouseY - panY) * scaleFactor,
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [step]);
+
+  const handleZoomIn = () => setViewport(v => ({ ...v, zoom: Math.min(50, v.zoom * 1.25) }));
+  const handleZoomOut = () => setViewport(v => ({ ...v, zoom: Math.max(0.25, v.zoom / 1.25) }));
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = { mouseX: e.clientX, mouseY: e.clientY, panX: viewport.panX, panY: viewport.panY };
+  };
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    const start = dragStartRef.current;
+    if (!start) return;
+    const dx = e.clientX - start.mouseX;
+    const dy = e.clientY - start.mouseY;
+    setViewport(v => ({ ...v, panX: start.panX + dx, panY: start.panY + dy }));
+  };
+  const handleCanvasMouseUp = () => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  };
+
   const handleProceedToCheckout = async () => {
     const { clientSecret } = await createPaymentIntent(product, size);
     setStripeClientSecret(clientSecret);
@@ -229,7 +287,7 @@ export default function App() {
   const currentProductOption = PRODUCT_OPTIONS.find((o) => o.type === product)!;
   const priceCents = currentProductOption.retailPriceCents[size];
   const center = polygon ? polygonCenter(polygon) : null;
-  const displaySvg = applyStreetStyle(svg, streetConfig, labelTypography);
+  const displaySvg = applyStreetStyle(svg, streetConfig, labelTypography, waterColor);
 
   return (
     <Layout step={step} onStepChange={setStep}>
@@ -238,7 +296,7 @@ export default function App() {
 
       {/* ─── DRAW ─── */}
       {step === 'draw' && (
-        <div className="relative h-[calc(100vh)] overflow-hidden">
+        <div className="relative h-[calc(100vh-80px)] overflow-hidden">
           <MapView
             onPolygonComplete={handlePolygonComplete}
             onAreaTooLarge={handleAreaTooLarge}
@@ -246,17 +304,6 @@ export default function App() {
             onShapeCleared={handleShapeCleared}
             className="absolute inset-0 w-full h-full"
           />
-
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 w-full max-w-xl z-[1000] px-4">
-            <div className="glass-panel rounded-full shadow-lg p-1.5 flex items-center border border-white/40">
-              <div className="pl-4 pr-3 text-slate-400">
-                <Search className="w-5 h-5" />
-              </div>
-              <span className="w-full text-slate-400/80 text-sm font-medium py-2">
-                Draw a polygon, rectangle, or circle using the toolbar (top-left)
-              </span>
-            </div>
-          </div>
 
           {areaError && (
             <div
@@ -274,28 +321,6 @@ export default function App() {
             </div>
           )}
 
-          <div className="absolute bottom-8 left-8 z-[1000] w-72">
-            <div className="glass-panel rounded-2xl shadow-xl border border-white/40 p-5">
-              <h3 className="font-headline font-bold text-sm mb-3 flex items-center gap-2">
-                <MapIcon className="w-4 h-4 text-primary" />
-                How to Draw
-              </h3>
-              <ol className="space-y-2">
-                {[
-                  'Use the toolbar (top-left) to choose a shape: polygon, rectangle, or circle',
-                  'Draw your boundary on the map',
-                  'Use the trash icon to clear and start over',
-                ].map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                    <span className="w-4 h-4 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {i + 1}
-                    </span>
-                    {s}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
         </div>
       )}
 
@@ -346,7 +371,15 @@ export default function App() {
           </aside>
 
           {/* Center: Artwork canvas */}
-          <main className="flex-grow bg-white relative flex items-center justify-center p-12 overflow-hidden">
+          <main
+            ref={mainRef}
+            className="flex-grow bg-white relative flex items-center justify-center p-12 overflow-hidden"
+            style={{ cursor: isDragging ? 'grabbing' : (displaySvg ? 'grab' : 'default'), userSelect: 'none' }}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
+          >
             <div className="absolute inset-0 map-mesh opacity-10 pointer-events-none" />
 
             <div className="absolute top-6 left-6 flex items-center gap-2">
@@ -356,20 +389,43 @@ export default function App() {
               </span>
             </div>
 
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10">
-              <div className="glass-panel px-4 py-2 rounded-full border border-primary/10 shadow-xl flex items-center gap-3">
-                <div className="w-4 h-4 bg-primary rounded-full flex items-center justify-center text-[10px] text-white font-bold">i</div>
-                <span className="text-xs font-medium text-slate-900">
-                  {loading ? 'Generating your artwork…' : 'Use the panels to customize your design.'}
-                </span>
+            {/* Zoom buttons — top-right, only shown when artwork is rendered */}
+            {displaySvg && (
+              <div className="absolute top-6 right-6 flex flex-col gap-2 z-20">
+                <button
+                  onClick={handleZoomIn}
+                  className="w-9 h-9 glass-panel rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:text-primary transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleZoomOut}
+                  className="w-9 h-9 glass-panel rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:text-primary transition-colors"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
               </div>
-            </div>
+            )}
+
+            {/* Loading overlay — centered in the panel */}
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                <div className="glass-panel rounded-2xl shadow-xl p-6 flex flex-col items-center gap-3">
+                  <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                  <p className="text-sm font-semibold text-slate-600">Generating artwork…</p>
+                </div>
+              </div>
+            )}
 
             {/* Artwork canvas with overlays */}
-            <div className="relative w-full max-w-[560px] aspect-square shadow-2xl border border-white p-1 flex items-center justify-center overflow-hidden">
-              <div className="absolute inset-0 border-[12px] border-white z-10 pointer-events-none" />
-
-              <ArtworkPreview svg={displaySvg} loading={loading} error={error} />
+            <div
+              className="relative w-full max-w-[560px] aspect-square flex items-center justify-center"
+              style={{
+                transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`,
+                transformOrigin: 'center',
+              }}
+            >
+              <ArtworkPreview svg={displaySvg} loading={false} error={error} />
 
               {/* Coordinates overlay */}
               {coordsConfig.show && center && (
@@ -412,21 +468,6 @@ export default function App() {
                   {mapTitle}
                 </div>
               )}
-
-              {/* Floating zoom controls */}
-              <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-20">
-                <button className="w-9 h-9 glass-panel rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:text-primary transition-colors">
-                  <Plus className="w-4 h-4" />
-                </button>
-                <button className="w-9 h-9 glass-panel rounded-full flex items-center justify-center shadow-sm text-slate-600 hover:text-primary transition-colors">
-                  <Minus className="w-4 h-4" />
-                </button>
-                {loading && (
-                  <button className="w-9 h-9 glass-panel rounded-full flex items-center justify-center shadow-sm text-primary">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  </button>
-                )}
-              </div>
             </div>
           </main>
 
@@ -448,6 +489,8 @@ export default function App() {
             onCoordsConfigChange={(patch) => setCoordsConfig((c) => ({ ...c, ...patch }))}
             symbolConfig={symbolConfig}
             onSymbolConfigChange={(patch) => setSymbolConfig((s) => ({ ...s, ...patch }))}
+            waterColor={waterColor}
+            onWaterColorChange={setWaterColor}
             svg={displaySvg}
             draftId={draftId}
             loading={loading}

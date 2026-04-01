@@ -3,6 +3,7 @@ import {
   Route, Type, MapPin, Heart, Share2, ArrowRight,
   Star, Zap, Download,
 } from 'lucide-react';
+import ColorPalette from './ColorPalette.js';
 import StyleSelector from './StyleSelector.js';
 import { cn } from '../lib/utils.js';
 import {
@@ -63,6 +64,8 @@ interface Props {
   onStyleChange: (s: StyleName) => void;
   streetConfig: StreetConfig;
   onStreetConfigChange: (patch: Partial<StreetConfig>) => void;
+  waterColor: string;
+  onWaterColorChange: (color: string) => void;
   // Typography
   mapTitle: string;
   onMapTitleChange: (t: string) => void;
@@ -156,6 +159,7 @@ export default function StudioPanel({
   activeTab,
   styleOptions, selectedStyle, onStyleChange,
   streetConfig, onStreetConfigChange,
+  waterColor, onWaterColorChange,
   mapTitle, onMapTitleChange,
   typography, onTypographyChange,
   labelTypography, onLabelTypographyChange,
@@ -308,36 +312,18 @@ export default function StudioPanel({
 
                         {/* Color */}
                         <div className="space-y-1.5">
-                          <Label>
-                            Color
-                            {!groupStyle.color && (
-                              <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>
-                            )}
-                          </Label>
-                          <div className="flex flex-wrap gap-1.5">
-                            <button
-                              onClick={() => patchGroupStyle({ color: null })}
-                              title="Follow color theme"
-                              className={cn(
-                                'w-6 h-6 rounded-[5px] border-2 transition-all flex items-center justify-center text-[8px] font-bold',
-                                !groupStyle.color
-                                  ? 'border-primary text-primary bg-primary/10 scale-110'
-                                  : 'border-dashed border-slate-300 text-slate-400 hover:scale-105',
+                          <div className="flex items-center gap-2">
+                            <Label>
+                              Color
+                              {!groupStyle.color && (
+                                <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>
                               )}
-                            >
-                              Auto
-                            </button>
-                            {COLOR_SWATCHES.map((c) => (
-                              <button
-                                key={c}
-                                onClick={() => patchGroupStyle({ color: c })}
-                                className={cn(
-                                  'w-6 h-6 rounded-[5px] border-2 transition-all',
-                                  groupStyle.color === c ? 'border-primary scale-110' : 'border-slate-200 hover:scale-105',
-                                )}
-                                style={{ background: c }}
-                              />
-                            ))}
+                            </Label>
+                            <ColorPalette
+                              value={groupStyle.color}
+                              onChange={(c) => patchGroupStyle({ color: c })}
+                              allowAuto
+                            />
                           </div>
                         </div>
                       </div>
@@ -349,6 +335,16 @@ export default function StudioPanel({
             <p className="text-[10px] text-slate-400 leading-relaxed">
               Toggling a street type regenerates the artwork. Style changes apply instantly.
             </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Label>Water Fill</Label>
+              <ColorPalette
+                value={waterColor}
+                onChange={(c) => { if (c) onWaterColorChange(c); }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -447,16 +443,16 @@ export default function StudioPanel({
               />
             </div>
 
-            {!isTitle && (
+            {false && !isTitle && (
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <Label>Offset Above Line</Label>
-                  <span className="text-xs font-bold text-primary">{activeTypo.baselineOffset ?? 24}px</span>
+                  <span className="text-xs font-bold text-primary">{activeTypo.baselineOffset ?? 12}px</span>
                 </div>
                 <input
                   type="range" min="0" max="80" step="1"
                   className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
-                  value={activeTypo.baselineOffset ?? 24}
+                  value={activeTypo.baselineOffset ?? 12}
                   onChange={(e) => onChange({ baselineOffset: parseInt(e.target.value) })}
                 />
                 <div className="flex justify-between text-[9px] text-slate-400 font-medium">
