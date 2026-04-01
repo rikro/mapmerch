@@ -83,7 +83,7 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
       },
       edit: {
         featureGroup: drawnItems,
-        edit:         false,  // removes the pencil button
+        edit:         false,  // disables edit mode — button is hidden via CSS in index.css (.leaflet-draw-edit-edit)
       },
     });
     map.addControl(drawControl);

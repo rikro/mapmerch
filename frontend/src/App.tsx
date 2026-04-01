@@ -244,7 +244,7 @@ export default function App() {
                 <Search className="w-5 h-5" />
               </div>
               <span className="w-full text-slate-400/80 text-sm font-medium py-2">
-                Use the polygon tool (top-left) to draw your street boundary
+                Draw a polygon, rectangle, or circle using the toolbar (top-left)
               </span>
             </div>
           </div>
