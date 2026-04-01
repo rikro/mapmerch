@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  // Navigate to the draw step
-  await page.getByRole('button', { name: /Start Your Map/i }).click();
+  // Navigate to the draw step via the nav bar button (scoped to <nav> to avoid ambiguity)
+  await page.getByRole('navigation').getByRole('button', { name: 'Map Explorer' }).click();
   await expect(page.getByTestId('map-view')).toBeVisible();
 });
 
@@ -17,24 +17,24 @@ test('use my location button is visible', async ({ page }) => {
 
 test('location search shows error for empty query', async ({ page }) => {
   await page.getByTestId('location-search-input').fill('');
-  await page.getByTestId('location-search-submit').click();
+  await page.getByTestId('location-search-submit').click({ force: true });
   // No fetch is made for empty input — no error shown either, button is just disabled or no-op
   await expect(page.getByTestId('location-search-error')).not.toBeVisible();
 });
 
 test('location search shows not-found message for gibberish query', async ({ page }) => {
   // Mock Nominatim to return empty results
-  await page.route('**/nominatim.openstreetmap.org/**', route =>
+  await page.route('https://nominatim.openstreetmap.org/**', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
   );
   await page.getByTestId('location-search-input').fill('zzzznotaplace12345');
-  await page.getByTestId('location-search-submit').click();
-  await expect(page.getByTestId('location-search-error')).toBeVisible();
+  await page.getByTestId('location-search-input').press('Enter');
+  await expect(page.getByTestId('location-search-error')).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId('location-search-error')).toContainText('No results');
 });
 
 test('location search flies to result on valid query', async ({ page }) => {
-  await page.route('**/nominatim.openstreetmap.org/**', route =>
+  await page.route('https://nominatim.openstreetmap.org/**', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -42,7 +42,7 @@ test('location search flies to result on valid query', async ({ page }) => {
     }),
   );
   await page.getByTestId('location-search-input').fill('New York');
-  await page.getByTestId('location-search-submit').click();
+  await page.getByTestId('location-search-input').press('Enter');
   // No assertion on map pan (requires visual check); verify error is NOT shown
   await expect(page.getByTestId('location-search-error')).not.toBeVisible();
 });

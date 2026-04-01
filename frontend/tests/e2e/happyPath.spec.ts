@@ -29,9 +29,10 @@ async function mockBackendRoutes(page: Page) {
   );
 }
 
-test('happy path: map loads on initial render', async ({ page }) => {
+test('happy path: map loads after navigating to draw step', async ({ page }) => {
   await mockBackendRoutes(page);
   await page.goto('/');
+  await page.getByRole('navigation').getByRole('button', { name: 'Map Explorer' }).click();
 
   await expect(page.getByTestId('map-view')).toBeVisible();
 });
@@ -39,6 +40,7 @@ test('happy path: map loads on initial render', async ({ page }) => {
 test('customize step shows style and product selectors after artwork generation', async ({ page }) => {
   await mockBackendRoutes(page);
   await page.goto('/');
+  await page.getByRole('navigation').getByRole('button', { name: 'Map Explorer' }).click();
 
   // Simulate polygon completion by calling the React state updater via page evaluation
   // (Leaflet draw requires real user interaction; we verify the UI after state changes)
@@ -52,6 +54,7 @@ test('customize step shows style and product selectors after artwork generation'
 test('shows area-too-large error when polygon exceeds limit', async ({ page }) => {
   await mockBackendRoutes(page);
   await page.goto('/');
+  await page.getByRole('navigation').getByRole('button', { name: 'Map Explorer' }).click();
 
   // MapView component handles area validation internally
   // Verified via the onAreaTooLarge callback in MapView — this is unit-tested at component level
