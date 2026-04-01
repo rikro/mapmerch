@@ -95,6 +95,22 @@ function buildOverpassQuery(polygon: GeoJSONPolygon): string {
   return `[out:json][timeout:60];(way[${filter}](poly:"${polyStr}"););out geom;`;
 }
 
+function buildWaterQuery(polygon: GeoJSONPolygon): string {
+  const coords = polygon.coordinates[0] as [number, number][];
+  const polyStr = coords.map(([lng, lat]) => `${lat} ${lng}`).join(' ');
+  const poly = `poly:"${polyStr}"`;
+  return (
+    `[out:json][timeout:60];(` +
+    `way["natural"="water"](${poly});` +
+    `way["waterway"="riverbank"](${poly});` +
+    `way["landuse"="reservoir"](${poly});` +
+    `relation["natural"="water"]["type"="multipolygon"](${poly});` +
+    `relation["waterway"="riverbank"]["type"="multipolygon"](${poly});` +
+    `relation["landuse"="reservoir"]["type"="multipolygon"](${poly});` +
+    `);out geom;`
+  );
+}
+
 async function fetchWithRetry(
   url: string,
   body: string,
@@ -121,4 +137,15 @@ export async function fetchStreetGeometry(
   const query = buildOverpassQuery(polygon);
   const response = await fetchWithRetry(OVERPASS_URL, query);
   return toGeoJSON(response);
+}
+
+export async function fetchWaterGeometry(polygon: GeoJSONPolygon): Promise<WaterRing[]> {
+  try {
+    const query = buildWaterQuery(polygon);
+    const response = await fetchWithRetry(OVERPASS_URL, query);
+    return toWaterRings(response);
+  } catch {
+    // Water is decorative — fail silently rather than blocking SVG generation.
+    return [];
+  }
 }
