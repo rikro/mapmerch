@@ -119,6 +119,7 @@ export default function App() {
   const [product] = useState<ProductType>('print');
   const [size] = useState<string>('12x12');
   const [areaError, setAreaError] = useState<string | null>(null);
+  const [polygonLargeHint, setPolygonLargeHint] = useState(false);
   const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [studioTab, setStudioTab] = useState<StudioTab>('streets');
@@ -140,12 +141,18 @@ export default function App() {
   });
 
   const handleAreaTooLarge = useCallback(() => {
-    setAreaError('Selected area is too large. Please draw a smaller boundary.');
+    setAreaError('Area exceeds the maximum supported size. Please draw a smaller boundary.');
+    setPolygonLargeHint(false);
+  }, []);
+
+  const handlePolygonLarge = useCallback(() => {
+    setPolygonLargeHint(true);
   }, []);
 
   const handleShapeCleared = useCallback(() => {
     setPolygon(null);
     setAreaError(null);
+    setPolygonLargeHint(false);
   }, []);
 
   const labelOffsetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,6 +169,7 @@ export default function App() {
     (p: PolygonCoords) => {
       setPolygon(p);
       setAreaError(null);
+      setPolygonLargeHint(false); // will be re-set by onPolygonLarge if applicable
       const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
       generate(p, style, highwayTypes, labelTypography.baselineOffset ?? 24, groupMap);
       setStep('customize');
@@ -234,6 +242,7 @@ export default function App() {
           <MapView
             onPolygonComplete={handlePolygonComplete}
             onAreaTooLarge={handleAreaTooLarge}
+            onPolygonLarge={handlePolygonLarge}
             onShapeCleared={handleShapeCleared}
             className="absolute inset-0 w-full h-full"
           />
@@ -256,6 +265,12 @@ export default function App() {
             >
               <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
               <p className="text-sm font-medium text-red-700">{areaError}</p>
+            </div>
+          )}
+          {polygonLargeHint && !areaError && (
+            <div className="absolute top-36 left-1/2 -translate-x-1/2 z-[1001] glass-panel rounded-xl shadow-lg px-5 py-3 flex items-center gap-3 border border-blue-200">
+              <HelpCircle className="w-5 h-5 text-blue-500 flex-shrink-0" />
+              <p className="text-sm font-medium text-blue-700">Large area — showing major roads only. Draw a smaller area for full street detail.</p>
             </div>
           )}
 

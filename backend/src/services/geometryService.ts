@@ -33,11 +33,42 @@ export function toGeoJSON(overpassResponse: OverpassResponse): GeoJSONFeatureCol
   return { type: 'FeatureCollection', features };
 }
 
+// ── Area-based road-density tiers ────────────────────────────────────────────
+// Thresholds in square degrees (shoelace on raw lat/lng — same formula as the
+// frontend). Adjust these values to tune which roads appear at each scale.
+const TIER_ALL_SQ_DEG      = 0.005;  // < ~5×4 km  → all roads
+const TIER_TERTIARY_SQ_DEG = 0.025;  // < ~15×10 km → tertiary and above
+const TIER_PRIMARY_SQ_DEG  = 0.1;    // < ~30×22 km → primary and above
+                                      // ≥ 0.1       → motorway + trunk only
+
+function polygonAreaSqDeg(coords: [number, number][]): number {
+  let area = 0;
+  for (let i = 0; i < coords.length; i++) {
+    const j = (i + 1) % coords.length;
+    area += coords[i][0] * coords[j][1];
+    area -= coords[j][0] * coords[i][1];
+  }
+  return Math.abs(area) / 2;
+}
+
+function highwayFilter(areaSqDeg: number): string {
+  if (areaSqDeg < TIER_ALL_SQ_DEG) {
+    return '"highway"';
+  }
+  if (areaSqDeg < TIER_TERTIARY_SQ_DEG) {
+    return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified)$"';
+  }
+  if (areaSqDeg < TIER_PRIMARY_SQ_DEG) {
+    return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link)$"';
+  }
+  return '"highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link)$"';
+}
+
 function buildOverpassQuery(polygon: GeoJSONPolygon): string {
-  const coords = polygon.coordinates[0]
-    .map(([lng, lat]) => `${lat} ${lng}`)
-    .join(' ');
-  return `[out:json][timeout:30];(way["highway"](poly:"${coords}"););out geom;`;
+  const coords = polygon.coordinates[0] as [number, number][];
+  const polyStr = coords.map(([lng, lat]) => `${lat} ${lng}`).join(' ');
+  const filter  = highwayFilter(polygonAreaSqDeg(coords));
+  return `[out:json][timeout:60];(way[${filter}](poly:"${polyStr}"););out geom;`;
 }
 
 async function fetchWithRetry(

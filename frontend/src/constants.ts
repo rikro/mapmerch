@@ -28,8 +28,14 @@ export const PRODUCT_OPTIONS: ProductOption[] = [
   },
 ];
 
-// Max polygon area in square degrees (~roughly 5km² depending on latitude)
-export const MAX_POLYGON_AREA_SQ_DEG = 0.001;
+// Hard upper limit — requests above this are rejected for all draw tools
+// (~70×50 km at 41° lat, i.e. a large metro area)
+export const MAX_POLYGON_AREA_SQ_DEG = 0.5;
+
+// Above this threshold the polygon tool shows an info hint that road
+// detail will be reduced by the backend's tiered highway filter
+// (~5×4 km at 41° lat — first tier boundary)
+export const POLYGON_LARGE_AREA_HINT_SQ_DEG = 0.005;
 
 export const STREET_GROUPS: { id: StreetGroupId; label: string; types: string[]; defaultOn: boolean }[] = [
   { id: 'major',      label: 'Major Roads',   types: ['motorway', 'trunk', 'primary'],                 defaultOn: true  },

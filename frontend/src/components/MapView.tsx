@@ -3,13 +3,14 @@ import L from 'leaflet';
 import 'leaflet-draw';
 import { AnimatePresence } from 'motion/react';
 import { PolygonCoords } from '../types.js';
-import { MAX_POLYGON_AREA_SQ_DEG } from '../constants.js';
+import { MAX_POLYGON_AREA_SQ_DEG, POLYGON_LARGE_AREA_HINT_SQ_DEG } from '../constants.js';
 import DeleteConfirmModal from './DeleteConfirmModal.js';
 import LocationSearch from './LocationSearch.js';
 
 interface Props {
   onPolygonComplete: (polygon: PolygonCoords) => void;
   onAreaTooLarge: () => void;
+  onPolygonLarge?: () => void;
   onShapeCleared?: () => void;
   className?: string;
 }
@@ -31,30 +32,32 @@ function circleToPolygon(
   return points;
 }
 
-function computeApproxAreaSqDeg(latlngs: L.LatLng[]): number {
-  // Shoelace formula on lat/lng (approximate, sufficient for area check)
+// Shoelace formula on [lng, lat] pairs — sufficient for area tier checks.
+function computeApproxAreaSqDeg(coords: [number, number][]): number {
   let area = 0;
-  for (let i = 0; i < latlngs.length; i++) {
-    const j = (i + 1) % latlngs.length;
-    area += latlngs[i].lng * latlngs[j].lat;
-    area -= latlngs[j].lng * latlngs[i].lat;
+  for (let i = 0; i < coords.length; i++) {
+    const j = (i + 1) % coords.length;
+    area += coords[i][0] * coords[j][1];
+    area -= coords[j][0] * coords[i][1];
   }
   return Math.abs(area) / 2;
 }
 
-export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeCleared, className }: Props) {
+export default function MapView({ onPolygonComplete, onAreaTooLarge, onPolygonLarge, onShapeCleared, className }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   // Refs so the map event handler always calls the latest callbacks
   // without needing to re-initialize the map when they change.
   const onPolygonCompleteRef = useRef(onPolygonComplete);
   const onAreaTooLargeRef = useRef(onAreaTooLarge);
+  const onPolygonLargeRef = useRef(onPolygonLarge);
   const onShapeClearedRef = useRef(onShapeCleared);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
 
   useEffect(() => { onPolygonCompleteRef.current = onPolygonComplete; }, [onPolygonComplete]);
   useEffect(() => { onAreaTooLargeRef.current = onAreaTooLarge; }, [onAreaTooLarge]);
+  useEffect(() => { onPolygonLargeRef.current = onPolygonLarge; }, [onPolygonLarge]);
   useEffect(() => { onShapeClearedRef.current = onShapeCleared; }, [onShapeCleared]);
 
   useEffect(() => {
@@ -198,18 +201,26 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
       if (event.layerType === 'circle') {
         const circle = event.layer as L.Circle;
         coords = circleToPolygon(circle.getLatLng(), circle.getRadius());
-      } else {
-        // polygon and rectangle both expose getLatLngs()
-        const poly = event.layer as L.Polygon;
-        const latlngs = poly.getLatLngs()[0] as L.LatLng[];
-        const area = computeApproxAreaSqDeg(latlngs);
+        const area = computeApproxAreaSqDeg(coords);
         if (area > MAX_POLYGON_AREA_SQ_DEG) {
           drawnItems.clearLayers();
           onAreaTooLargeRef.current();
           return;
         }
+      } else {
+        const poly = event.layer as L.Polygon;
+        const latlngs = poly.getLatLngs()[0] as L.LatLng[];
         coords = latlngs.map(ll => [ll.lng, ll.lat] as [number, number]);
         coords.push(coords[0]); // close ring
+        const area = computeApproxAreaSqDeg(coords);
+        if (area > MAX_POLYGON_AREA_SQ_DEG) {
+          drawnItems.clearLayers();
+          onAreaTooLargeRef.current();
+          return;
+        }
+        if (event.layerType === 'polygon' && area > POLYGON_LARGE_AREA_HINT_SQ_DEG) {
+          onPolygonLargeRef.current?.();
+        }
       }
 
       onPolygonCompleteRef.current({ type: 'Polygon', coordinates: [coords] });
