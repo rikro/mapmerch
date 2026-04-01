@@ -244,7 +244,7 @@ export default function App() {
                 <Search className="w-5 h-5" />
               </div>
               <span className="w-full text-slate-400/80 text-sm font-medium py-2">
-                Draw a polygon, rectangle, or circle using the toolbar (top-left)
+                Draw a polygon or circle using the toolbar (top-left)
               </span>
             </div>
           </div>
@@ -267,7 +267,7 @@ export default function App() {
               </h3>
               <ol className="space-y-2">
                 {[
-                  'Use the toolbar (top-left) to choose a shape: polygon, rectangle, or circle',
+                  'Use the toolbar (top-left) to choose a shape: polygon or circle',
                   'Draw your boundary on the map',
                   'Use the trash icon to clear and start over',
                 ].map((s, i) => (

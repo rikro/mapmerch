@@ -75,7 +75,7 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
     const drawControl = new (L as unknown as { Control: { Draw: new (opts: unknown) => L.Control } }).Control.Draw({
       draw: {
         polygon:      { showArea: true },
-        rectangle:    {},
+        rectangle:    false,
         circle:       { showRadius: true },
         polyline:     false,
         circlemarker: false,
@@ -87,34 +87,6 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
       },
     });
     map.addControl(drawControl);
-
-    // Patch: leaflet-draw's Rectangle uses a two-click draw mode, but any tiny
-    // mouse movement during the first click creates _shape, bypassing the guard
-    // and firing CREATED immediately with zero area. Fix: if _shape exists but
-    // is < 10 m diagonal when mouseup fires outside two-click mode, remove it
-    // so the original code falls through to set _isCurrentlyTwoClickDrawing.
-    const rectHandler = (drawControl as unknown as {
-      _toolbars: { draw: { _modes: { rectangle: { handler: {
-        _onMouseUp: (e: MouseEvent) => void;
-        _shape?: L.Rectangle;
-        _isCurrentlyTwoClickDrawing: boolean;
-        _map: L.Map;
-      } } } } };
-    })?._toolbars?.draw?._modes?.rectangle?.handler;
-    if (rectHandler) {
-      const origRectMouseUp = rectHandler._onMouseUp;
-      rectHandler._onMouseUp = function(this: typeof rectHandler, e: MouseEvent) {
-        if (this._shape && !this._isCurrentlyTwoClickDrawing) {
-          const bounds = this._shape.getBounds();
-          const diag = bounds.getSouthWest().distanceTo(bounds.getNorthEast());
-          if (diag < 10) {
-            this._map.removeLayer(this._shape);
-            delete this._shape;
-          }
-        }
-        origRectMouseUp.call(this, e);
-      };
-    }
 
     const trashBtn = containerRef.current?.querySelector(
       '.leaflet-draw-edit-remove',
