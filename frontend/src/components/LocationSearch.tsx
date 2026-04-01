@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Search, Crosshair } from 'lucide-react';
 import L from 'leaflet';
 import { cn } from '../lib/utils.js';
@@ -14,7 +14,6 @@ export default function LocationSearch({ mapRef }: Props) {
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [error, setError] = useState<GeoError>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const search = async () => {
     const q = query.trim();
@@ -26,6 +25,7 @@ export default function LocationSearch({ mapRef }: Props) {
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
         { headers: { 'User-Agent': 'MapMerch/1.0' } },
       );
+      if (!res.ok) throw new Error('Network error');
       const data = await res.json() as { lat: string; lon: string }[];
       if (data.length === 0) {
         setError('not-found');
@@ -71,7 +71,6 @@ export default function LocationSearch({ mapRef }: Props) {
     >
       <div className="flex items-center gap-1 glass-panel rounded-full shadow-lg border border-white/40 px-2 py-1.5">
         <input
-          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setError(null); }}
