@@ -89,10 +89,14 @@ export default function MapView({ onPolygonComplete, onAreaTooLarge, onShapeClea
 
   return (
     <div
-      ref={containerRef}
       className={className}
-      style={!className ? { width: '100%', height: '100vh' } : undefined}
+      style={!className ? { width: '100%', height: '100vh', position: 'relative' } : undefined}
       data-testid="map-view"
-    />
+    >
+      <div
+        ref={containerRef}
+        style={{ position: 'absolute', inset: 0 }}
+      />
+    </div>
   );
 }
