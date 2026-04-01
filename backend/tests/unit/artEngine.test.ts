@@ -1,5 +1,5 @@
 import { generateSvg } from '../../src/services/artEngine.js';
-import { GeoJSONFeatureCollection } from '../../src/types.js';
+import { GeoJSONFeatureCollection, WaterRing } from '../../src/types.js';
 
 const sampleStreetData: GeoJSONFeatureCollection = {
   type: 'FeatureCollection',
@@ -85,5 +85,45 @@ describe('generateSvg', () => {
   it('uses road-local class when feature has no highway property', () => {
     const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, { motorway: 'major' });
     expect(svg).toContain('class="road-local"');
+  });
+});
+
+describe('generateSvg with water rings', () => {
+  const sampleWater: WaterRing[] = [
+    [
+      [-87.635, 41.875],
+      [-87.625, 41.875],
+      [-87.625, 41.885],
+      [-87.635, 41.885],
+      [-87.635, 41.875],
+    ],
+  ];
+
+  it('renders water-body paths before road paths', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, sampleWater);
+    const waterIdx = svg.indexOf('class="water-body"');
+    const roadIdx = svg.indexOf('class="road-');
+    expect(waterIdx).toBeGreaterThanOrEqual(0);
+    expect(roadIdx).toBeGreaterThanOrEqual(0);
+    expect(waterIdx).toBeLessThan(roadIdx);
+  });
+
+  it('water paths use default gray fill and no stroke', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, sampleWater);
+    expect(svg).toContain('class="water-body"');
+    expect(svg).toContain('fill="#bfbfbf"');
+    expect(svg).toContain('stroke="none"');
+  });
+
+  it('generates valid SVG with no water rings when 5th arg omitted (backward compat)', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art');
+    expect(svg).toContain('<svg');
+    expect(svg).not.toContain('class="water-body"');
+  });
+
+  it('skips rings with fewer than 3 points', () => {
+    const shortRing: WaterRing[] = [[[-87.635, 41.875], [-87.625, 41.875]]];
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, shortRing);
+    expect(svg).not.toContain('class="water-body"');
   });
 });

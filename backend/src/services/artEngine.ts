@@ -1,4 +1,4 @@
-import { GeoJSONFeatureCollection, StyleName, StylePreset } from '../types.js';
+import { GeoJSONFeatureCollection, StyleName, StylePreset, WaterRing } from '../types.js';
 import { getStylePreset } from './stylePresets.js';
 
 const CANVAS_SIZE = 2400; // px — 8in at 300dpi, scales to any square product
@@ -6,6 +6,7 @@ const LABEL_FONT_SIZE = 40;
 const LABEL_DEFAULT_OFFSET_PX = 24; // perpendicular offset from the street line
 const LABEL_MIN_SEGMENT_PX = 200;  // skip labels on segments too short to read comfortably
 const LABEL_OPACITY = 0.65;
+const WATER_DEFAULT_FILL = '#bfbfbf'; // 25% gray (75% lightness)
 
 interface BoundingBox {
   minLng: number;
@@ -167,6 +168,23 @@ function renderPaths(
     .join('\n');
 }
 
+function renderWaterBodies(
+  waterRings: WaterRing[],
+  bbox: BoundingBox,
+  preset: StylePreset,
+): string {
+  if (waterRings.length === 0) return '';
+  return waterRings
+    .map(ring => {
+      const pts = ring.map(([lng, lat]) => toSvgCoords(lng, lat, bbox, preset.padding));
+      if (pts.length < 3) return '';
+      const d = `M ${pts.map(([x, y]) => `${x},${y}`).join(' L ')} Z`;
+      return `  <path class="water-body" d="${d}" fill="${WATER_DEFAULT_FILL}" stroke="none"/>`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 function renderStreetLabels(
   features: GeoJSONFeatureCollection['features'],
   bbox: BoundingBox,
@@ -219,17 +237,20 @@ export function generateSvg(
   style: StyleName,
   labelOffset = LABEL_DEFAULT_OFFSET_PX,
   groupMap: Record<string, string> = {},
+  waterRings: WaterRing[] = [],
 ): string {
   if (streetData.features.length === 0) {
     throw new Error('No street data to render');
   }
   const preset = getStylePreset(style);
   const bbox = getBoundingBox(streetData.features);
+  const water = renderWaterBodies(waterRings, bbox, preset);
   const paths = renderPaths(streetData.features, bbox, preset, groupMap);
   const labels = renderStreetLabels(streetData.features, bbox, preset, labelOffset);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}">
   <rect width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" fill="${preset.backgroundColor}"/>
+${water}
 ${paths}
 ${labels}
 </svg>`;
