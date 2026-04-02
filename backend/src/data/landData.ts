@@ -81,7 +81,9 @@ function intersectLandPolygon(land: LandPolygon, drawnPolygon: GeoJSONPolygon): 
     return [];
   }
 
-  // Take only the outer ring of each resulting polygon
+  // Take only the outer ring of each resulting polygon; holes (inner rings) are intentionally
+  // dropped — the water rendering model fills all non-land areas with water, so islands
+  // within water bodies will be rendered as water, which is acceptable at city scale.
   return result.map(poly => poly[0] as LandRing);
 }
 

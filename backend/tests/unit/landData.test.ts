@@ -55,4 +55,31 @@ describe('_fetchLandGeometryFromFeatures', () => {
     const rings = _fetchLandGeometryFromFeatures([], drawnOverLand);
     expect(rings).toEqual([]);
   });
+
+  it('returns rings from multiple land polygons (MultiPolygon-style input)', () => {
+    const twoPolygons = [
+      {
+        coordinates: [[[0, 10], [10, 10], [10, 20], [0, 20], [0, 10]]] as [number, number][][],
+        bbox: { minLng: 0, maxLng: 10, minLat: 10, maxLat: 20 },
+      },
+      {
+        coordinates: [[[20, 10], [30, 10], [30, 20], [20, 20], [20, 10]]] as [number, number][][],
+        bbox: { minLng: 20, maxLng: 30, minLat: 10, maxLat: 20 },
+      },
+    ];
+    // Drawn polygon overlaps only the first land square
+    const drawn: GeoJSONPolygon = {
+      type: 'Polygon',
+      coordinates: [[[2, 12], [8, 12], [8, 18], [2, 18], [2, 12]]],
+    };
+    const rings = _fetchLandGeometryFromFeatures(twoPolygons, drawn);
+    expect(rings.length).toBeGreaterThan(0);
+    // All returned coordinates must be within the first land square (lng 0–10)
+    for (const ring of rings) {
+      for (const [lng] of ring) {
+        expect(lng).toBeGreaterThanOrEqual(0);
+        expect(lng).toBeLessThanOrEqual(10);
+      }
+    }
+  });
 });
