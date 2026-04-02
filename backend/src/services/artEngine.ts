@@ -192,7 +192,7 @@ function renderWaterBodies(
       const pts = ring.map(([lng, lat]) => toSvgCoords(lng, lat, bbox, preset.padding));
       if (pts.length < 3) return '';
       const d = `M ${pts.map(([x, y]) => `${x},${y}`).join(' L ')} Z`;
-      return `  <path class="water-body" d="${d}" fill="${WATER_DEFAULT_FILL}" stroke="none"/>`;
+      return `  <path class="water-body" d="${d}" fill="${WATER_DEFAULT_FILL}" stroke="none" fill-rule="evenodd"/>`;
     })
     .filter(Boolean)
     .join('\n');
