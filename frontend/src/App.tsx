@@ -89,7 +89,7 @@ function applyStreetStyle(
     labelTypography.color ? `fill:${labelTypography.color}` : '',
   ].filter(Boolean).join(';');
 
-  const style = `<style>path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}</style>`;
+  const style = `<style>rect.water-bg{fill:${waterColor};}path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}</style>`;
   return rawSvg.replace(/(<svg[^>]*>)/, `$1${style}`);
 }
 
