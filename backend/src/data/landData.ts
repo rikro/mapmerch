@@ -37,24 +37,26 @@ function computeBbox(ring: [number, number][]): BoundingBox {
   return { minLng, maxLng, minLat, maxLat };
 }
 
-// Collect all polygons from all features in the file.
-// The Natural Earth file has 11 features representing different zoom/detail levels;
-// using all of them ensures complete global coverage (the base feature has min_zoom=0
-// and contains the continental polygons; others add islands and finer detail).
-function collectAllPolygons(features: unknown[]): [number, number][][][] {
-  const all: [number, number][][][] = [];
-  for (const f of features as { geometry: { type: string; coordinates: unknown } }[]) {
-    if (f.geometry.type === 'MultiPolygon') {
-      all.push(...(f.geometry.coordinates as [number, number][][][]));
-    } else if (f.geometry.type === 'Polygon') {
-      all.push(f.geometry.coordinates as [number, number][][]);
+// Use the base global feature (min_zoom=0). It contains the continental polygons
+// (Americas, Eurasia, Africa, etc.) and provides complete worldwide land coverage.
+// Using only this feature keeps per-request intersection cost manageable.
+function getBaseFeaturePolygons(features: unknown[]): [number, number][][][] {
+  for (const f of features as { properties: Record<string, unknown>; geometry: { type: string; coordinates: unknown } }[]) {
+    if (f.properties?.min_zoom === 0 && f.geometry.type === 'MultiPolygon') {
+      return f.geometry.coordinates as [number, number][][][];
     }
   }
-  return all;
+  // Fallback: first MultiPolygon feature
+  for (const f of features as { geometry: { type: string; coordinates: unknown } }[]) {
+    if (f.geometry.type === 'MultiPolygon') {
+      return f.geometry.coordinates as [number, number][][][];
+    }
+  }
+  return [];
 }
 
-// Explode all features into individual polygons with precomputed bboxes.
-const detailedPolygons: LandPolygon[] = collectAllPolygons(rawData.features).map(
+// Explode the base feature into individual polygons with precomputed bboxes.
+const detailedPolygons: LandPolygon[] = getBaseFeaturePolygons(rawData.features).map(
   polygonCoords => ({
     coordinates: polygonCoords,
     bbox: computeBbox(polygonCoords[0]), // outer ring determines bbox
