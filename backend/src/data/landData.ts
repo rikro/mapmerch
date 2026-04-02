@@ -1,13 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import polygonClipping from 'polygon-clipping';
 import type { MultiPolygon, Polygon } from 'polygon-clipping';
 import { GeoJSONPolygon, LandRing } from '../types.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const rawData = JSON.parse(
-  readFileSync(join(__dirname, 'ne_10m_land.json'), 'utf-8'),
+  readFileSync(join(process.cwd(), 'src', 'data', 'ne_10m_land.json'), 'utf-8'),
 );
 
 interface BoundingBox {
