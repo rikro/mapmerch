@@ -1,5 +1,5 @@
 import { generateSvg } from '../../src/services/artEngine.js';
-import { GeoJSONFeatureCollection, WaterRing } from '../../src/types.js';
+import { GeoJSONFeatureCollection, WaterRing, LandRing, GeoJSONPolygon } from '../../src/types.js';
 
 const sampleStreetData: GeoJSONFeatureCollection = {
   type: 'FeatureCollection',
@@ -125,5 +125,93 @@ describe('generateSvg with water rings', () => {
     const shortRing: WaterRing[] = [[[-87.635, 41.875], [-87.625, 41.875]]];
     const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, shortRing);
     expect(svg).not.toContain('class="water-body"');
+  });
+});
+
+describe('generateSvg with drawn polygon (land/water/clip)', () => {
+  // A polygon that wraps tightly around the sample street data (Chicago area)
+  const samplePolygon: GeoJSONPolygon = {
+    type: 'Polygon',
+    coordinates: [[
+      [-87.640, 41.870],
+      [-87.620, 41.870],
+      [-87.620, 41.890],
+      [-87.640, 41.890],
+      [-87.640, 41.870],
+    ]],
+  };
+
+  const sampleLand: LandRing[] = [
+    [
+      [-87.640, 41.870],
+      [-87.620, 41.870],
+      [-87.620, 41.890],
+      [-87.640, 41.890],
+      [-87.640, 41.870],
+    ],
+  ];
+
+  const sampleWater: WaterRing[] = [
+    [
+      [-87.635, 41.875],
+      [-87.625, 41.875],
+      [-87.625, 41.885],
+      [-87.635, 41.885],
+      [-87.635, 41.875],
+    ],
+  ];
+
+  it('includes <clipPath id="frame"> in defs when drawnPolygon provided', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, [], [], samplePolygon);
+    expect(svg).toContain('<clipPath id="frame">');
+  });
+
+  it('includes rect.canvas-bg and rect.water-bg when drawnPolygon provided', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, [], [], samplePolygon);
+    expect(svg).toContain('class="canvas-bg"');
+    expect(svg).toContain('class="water-bg"');
+  });
+
+  it('canvas-bg uses preset backgroundColor and water-bg uses WATER_DEFAULT_FILL', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, [], [], samplePolygon);
+    // canvas-bg should have the style background color (white for minimal-line-art)
+    expect(svg).toMatch(/class="canvas-bg"[^>]*fill="#ffffff"/);
+    // water-bg should have the default water fill
+    expect(svg).toMatch(/class="water-bg"[^>]*fill="#bfbfbf"/);
+  });
+
+  it('wraps road paths in <g clip-path="url(#frame)">', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, [], [], samplePolygon);
+    expect(svg).toContain('clip-path="url(#frame)"');
+    // The clip group must appear before the road paths
+    const clipIdx = svg.indexOf('clip-path="url(#frame)"');
+    const roadIdx = svg.indexOf('class="road-');
+    expect(clipIdx).toBeLessThan(roadIdx);
+  });
+
+  it('renders land paths before water paths before road paths', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, sampleWater, sampleLand, samplePolygon);
+    const landIdx = svg.indexOf('class="land-body"');
+    const waterIdx = svg.indexOf('class="water-body"');
+    const roadIdx = svg.indexOf('class="road-');
+    expect(landIdx).toBeGreaterThanOrEqual(0);
+    expect(waterIdx).toBeGreaterThanOrEqual(0);
+    expect(roadIdx).toBeGreaterThanOrEqual(0);
+    expect(landIdx).toBeLessThan(waterIdx);
+    expect(waterIdx).toBeLessThan(roadIdx);
+  });
+
+  it('land paths use preset backgroundColor as fill', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art', 24, {}, [], sampleLand, samplePolygon);
+    expect(svg).toContain('class="land-body"');
+    expect(svg).toContain('fill="#ffffff"'); // minimal-line-art backgroundColor
+  });
+
+  it('old signature (no polygon) still works — no clipPath, no canvas-bg/water-bg', () => {
+    const svg = generateSvg(sampleStreetData, 'minimal-line-art');
+    expect(svg).toContain('<svg');
+    expect(svg).not.toContain('<clipPath');
+    expect(svg).not.toContain('canvas-bg');
+    expect(svg).not.toContain('water-bg');
   });
 });

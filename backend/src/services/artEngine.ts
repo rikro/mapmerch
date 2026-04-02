@@ -1,4 +1,4 @@
-import { GeoJSONFeatureCollection, StyleName, StylePreset, WaterRing } from '../types.js';
+import { GeoJSONFeatureCollection, GeoJSONPolygon, StyleName, StylePreset, WaterRing, LandRing } from '../types.js';
 import { getStylePreset } from './stylePresets.js';
 
 const CANVAS_SIZE = 2400; // px — 8in at 300dpi, scales to any square product
@@ -27,6 +27,19 @@ function getBoundingBox(
       if (lat < minLat) minLat = lat;
       if (lat > maxLat) maxLat = lat;
     }
+  }
+  return { minLng, maxLng, minLat, maxLat };
+}
+
+function getBoundingBoxFromPolygon(polygon: GeoJSONPolygon): BoundingBox {
+  const coords = polygon.coordinates[0];
+  let minLng = Infinity, maxLng = -Infinity;
+  let minLat = Infinity, maxLat = -Infinity;
+  for (const [lng, lat] of coords) {
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
   }
   return { minLng, maxLng, minLat, maxLat };
 }
@@ -185,6 +198,29 @@ function renderWaterBodies(
     .join('\n');
 }
 
+function renderLandBodies(
+  landRings: LandRing[],
+  bbox: BoundingBox,
+  preset: StylePreset,
+): string {
+  if (landRings.length === 0) return '';
+  return landRings
+    .map(ring => {
+      const pts = ring.map(([lng, lat]) => toSvgCoords(lng, lat, bbox, preset.padding));
+      if (pts.length < 3) return '';
+      const d = `M ${pts.map(([x, y]) => `${x},${y}`).join(' L ')} Z`;
+      return `    <path class="land-body" d="${d}" fill="${preset.backgroundColor}" stroke="none"/>`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function renderClipPath(polygon: GeoJSONPolygon, bbox: BoundingBox, padding: number): string {
+  const pts = polygon.coordinates[0].map(([lng, lat]) => toSvgCoords(lng, lat, bbox, padding));
+  const d = `M ${pts.map(([x, y]) => `${x},${y}`).join(' L ')} Z`;
+  return `    <clipPath id="frame">\n      <path d="${d}"/>\n    </clipPath>`;
+}
+
 function renderStreetLabels(
   features: GeoJSONFeatureCollection['features'],
   bbox: BoundingBox,
@@ -238,11 +274,36 @@ export function generateSvg(
   labelOffset = LABEL_DEFAULT_OFFSET_PX,
   groupMap: Record<string, string> = {},
   waterRings: WaterRing[] = [],
+  landRings: LandRing[] = [],
+  drawnPolygon?: GeoJSONPolygon,
 ): string {
   if (streetData.features.length === 0) {
     throw new Error('No street data to render');
   }
   const preset = getStylePreset(style);
+
+  if (drawnPolygon) {
+    const bbox = getBoundingBoxFromPolygon(drawnPolygon);
+    const clipPath = renderClipPath(drawnPolygon, bbox, preset.padding);
+    const land = renderLandBodies(landRings, bbox, preset);
+    const water = renderWaterBodies(waterRings, bbox, preset);
+    const paths = renderPaths(streetData.features, bbox, preset, groupMap);
+    const labels = renderStreetLabels(streetData.features, bbox, preset, labelOffset);
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}">
+  <defs>
+${clipPath}
+  </defs>
+  <rect class="canvas-bg" width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" fill="${preset.backgroundColor}"/>
+  <g clip-path="url(#frame)">
+    <rect class="water-bg" width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" fill="${WATER_DEFAULT_FILL}"/>
+${land ? land + '\n' : ''}${water ? water + '\n' : ''}${paths}
+${labels}
+  </g>
+</svg>`;
+  }
+
+  // Legacy path — no polygon provided (used by existing tests and backward-compat callers)
   const bbox = getBoundingBox(streetData.features);
   const water = renderWaterBodies(waterRings, bbox, preset);
   const paths = renderPaths(streetData.features, bbox, preset, groupMap);
