@@ -37,21 +37,24 @@ function computeBbox(ring: [number, number][]): BoundingBox {
   return { minLng, maxLng, minLat, maxLat };
 }
 
-// Pick the most detailed feature: the MultiPolygon with the most sub-polygons.
-// The Natural Earth file has 11 features at different zoom/detail levels;
-// the one with the most sub-polygons (Feature 7, ~2773) is the most granular.
-function pickMostDetailedFeature(features: unknown[]): [number, number][][][] {
-  let best: [number, number][][][] = [];
+// Collect all polygons from all features in the file.
+// The Natural Earth file has 11 features representing different zoom/detail levels;
+// using all of them ensures complete global coverage (the base feature has min_zoom=0
+// and contains the continental polygons; others add islands and finer detail).
+function collectAllPolygons(features: unknown[]): [number, number][][][] {
+  const all: [number, number][][][] = [];
   for (const f of features as { geometry: { type: string; coordinates: unknown } }[]) {
-    if (f.geometry.type !== 'MultiPolygon') continue;
-    const coords = f.geometry.coordinates as [number, number][][][];
-    if (coords.length > best.length) best = coords;
+    if (f.geometry.type === 'MultiPolygon') {
+      all.push(...(f.geometry.coordinates as [number, number][][][]));
+    } else if (f.geometry.type === 'Polygon') {
+      all.push(f.geometry.coordinates as [number, number][][]);
+    }
   }
-  return best;
+  return all;
 }
 
-// Explode the chosen MultiPolygon into individual polygons with precomputed bboxes.
-const detailedPolygons: LandPolygon[] = pickMostDetailedFeature(rawData.features).map(
+// Explode all features into individual polygons with precomputed bboxes.
+const detailedPolygons: LandPolygon[] = collectAllPolygons(rawData.features).map(
   polygonCoords => ({
     coordinates: polygonCoords,
     bbox: computeBbox(polygonCoords[0]), // outer ring determines bbox
