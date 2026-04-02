@@ -1,12 +1,19 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import polygonClipping from 'polygon-clipping';
 import type { MultiPolygon, Polygon } from 'polygon-clipping';
 import { GeoJSONPolygon, LandRing } from '../types.js';
 
-const rawData = JSON.parse(
-  readFileSync(join(process.cwd(), 'src', 'data', 'ne_10m_land.json'), 'utf-8'),
-);
+function resolveDataPath(): string {
+  const cwd = process.cwd();
+  const srcPath = join(cwd, 'src', 'data', 'ne_10m_land.json');
+  if (existsSync(srcPath)) return srcPath;
+  const distPath = join(cwd, 'dist', 'data', 'ne_10m_land.json');
+  if (existsSync(distPath)) return distPath;
+  throw new Error('ne_10m_land.json not found. Run from the backend/ directory.');
+}
+
+const rawData = JSON.parse(readFileSync(resolveDataPath(), 'utf-8'));
 
 interface BoundingBox {
   minLng: number; maxLng: number;
