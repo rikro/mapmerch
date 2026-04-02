@@ -27,13 +27,13 @@ export function useArtwork(sessionToken: string) {
   const lastPolygonRef = useRef<PolygonCoords | null>(null);
 
   const generate = useCallback(
-    async (polygon: PolygonCoords, style: StyleName, highwayTypes: string[], labelOffset: number, groupMap: Record<string, string>) => {
+    async (polygon: PolygonCoords, style: StyleName, highwayTypes: string[], labelOffset: number, groupMap: Record<string, string>, clipToBoundary: boolean) => {
       if (lastPolygonRef.current !== polygon) {
         cache.current.clear();
         lastPolygonRef.current = polygon;
       }
 
-      const cacheKey = `${style}:${[...highwayTypes].sort().join(',')}:${labelOffset}`;
+      const cacheKey = `${style}:${[...highwayTypes].sort().join(',')}:${labelOffset}:${clipToBoundary}`;
       const cached = cache.current.get(cacheKey);
       if (cached) {
         setState({ draftId: cached.draftId, svg: cached.svg, loading: false, error: null });
@@ -42,7 +42,7 @@ export function useArtwork(sessionToken: string) {
 
       setState(s => ({ ...s, loading: true, error: null }));
       try {
-        const result = await generateArtwork(polygon, style, sessionToken, highwayTypes, labelOffset, groupMap);
+        const result = await generateArtwork(polygon, style, sessionToken, highwayTypes, labelOffset, groupMap, clipToBoundary);
         cache.current.set(cacheKey, { draftId: result.draftId, svg: result.svg });
         setState({ draftId: result.draftId, svg: result.svg, loading: false, error: null });
       } catch (err) {

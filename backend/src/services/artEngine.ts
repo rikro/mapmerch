@@ -221,6 +221,12 @@ function renderClipPath(polygon: GeoJSONPolygon, bbox: BoundingBox, padding: num
   return `    <clipPath id="frame">\n      <path d="${d}"/>\n    </clipPath>`;
 }
 
+function renderBoundaryBorder(polygon: GeoJSONPolygon, bbox: BoundingBox, padding: number): string {
+  const pts = polygon.coordinates[0].map(([lng, lat]) => toSvgCoords(lng, lat, bbox, padding));
+  const d = `M ${pts.map(([x, y]) => `${x},${y}`).join(' L ')} Z`;
+  return `  <path class="boundary-border" d="${d}" fill="none"/>`;
+}
+
 function renderStreetLabels(
   features: GeoJSONFeatureCollection['features'],
   bbox: BoundingBox,
@@ -290,6 +296,8 @@ export function generateSvg(
     const paths = renderPaths(streetData.features, bbox, preset, groupMap);
     const labels = renderStreetLabels(streetData.features, bbox, preset, labelOffset);
 
+    const border = renderBoundaryBorder(drawnPolygon, bbox, preset.padding);
+
     return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}">
   <defs>
 ${clipPath}
@@ -300,6 +308,7 @@ ${clipPath}
 ${land ? land + '\n' : ''}${water ? water + '\n' : ''}${paths}
 ${labels}
   </g>
+${border}
 </svg>`;
   }
 

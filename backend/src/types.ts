@@ -75,6 +75,7 @@ export interface GenerateArtworkRequest {
   highwayTypes?: string[]; // OSM highway tag values to include; omit = all
   labelOffset?: number;   // perpendicular offset of label path from street line in SVG px
   groupMap?: Record<string, string>; // OSM highway type → group ID, e.g. { motorway: 'major' }
+  clipToBoundary?: boolean; // when false, omit clipPath and land/water-bg layers (default true)
 }
 
 export interface GenerateArtworkResponse {

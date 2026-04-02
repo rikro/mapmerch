@@ -15,7 +15,7 @@ artworkRouter.post('/generate', async (req: Request, res: Response) => {
   }
 
   try {
-    const { highwayTypes, labelOffset, groupMap } = req.body as GenerateArtworkRequest;
+    const { highwayTypes, labelOffset, groupMap, clipToBoundary = true } = req.body as GenerateArtworkRequest;
 
     const [streetData, waterRings] = await Promise.all([
       fetchStreetGeometry(polygon),
@@ -33,7 +33,7 @@ artworkRouter.post('/generate', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No streets of the selected types found in this area. Try enabling more street types.' });
     }
 
-    const svg = generateSvg(filtered, style, labelOffset, groupMap ?? {}, waterRings, landRings, polygon);
+    const svg = generateSvg(filtered, style, labelOffset, groupMap ?? {}, waterRings, landRings, clipToBoundary ? polygon : undefined);
     const draft = saveDraft(sessionToken, polygon, style, svg);
     const response: GenerateArtworkResponse = { draftId: draft.id, svg };
     return res.json(response);

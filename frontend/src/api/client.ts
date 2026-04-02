@@ -24,11 +24,12 @@ export async function generateArtwork(
   highwayTypes: string[],
   labelOffset: number,
   groupMap: Record<string, string>,
+  clipToBoundary: boolean,
 ): Promise<GenerateArtworkResponse> {
   const res = await fetch(`${BASE_URL}/api/artwork/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ polygon, style, sessionToken, highwayTypes, labelOffset, groupMap }),
+    body: JSON.stringify({ polygon, style, sessionToken, highwayTypes, labelOffset, groupMap, clipToBoundary }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };

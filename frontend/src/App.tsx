@@ -23,7 +23,7 @@ import { STYLE_OPTIONS, PRODUCT_OPTIONS, STREET_GROUPS, DEFAULT_STREET_CONFIG } 
 import {
   AppStep, PolygonCoords, StyleName, ProductType,
   TypographyConfig, CoordsConfig, SymbolConfig, SymbolIcon, CoordFormat, CoordPosition,
-  StreetConfig, DashStyle,
+  StreetConfig, DashStyle, BoundaryConfig,
 } from './types.js';
 import { cn } from './lib/utils.js';
 
@@ -68,6 +68,7 @@ function applyStreetStyle(
   config: StreetConfig,
   labelTypography: TypographyConfig,
   waterColor: string,
+  boundary: BoundaryConfig,
 ): string | null {
   if (!rawSvg) return null;
 
@@ -89,7 +90,11 @@ function applyStreetStyle(
     labelTypography.color ? `fill:${labelTypography.color}` : '',
   ].filter(Boolean).join(';');
 
-  const style = `<style>rect.water-bg{fill:${waterColor};}path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}</style>`;
+  const borderRule = boundary.clip && boundary.border
+    ? `path.boundary-border{stroke:${boundary.borderColor};stroke-width:${boundary.borderWeight};}`
+    : `path.boundary-border{display:none;}`;
+
+  const style = `<style>rect.water-bg{fill:${waterColor};}path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}${borderRule}</style>`;
   return rawSvg.replace(/(<svg[^>]*>)/, `$1${style}`);
 }
 
@@ -141,6 +146,9 @@ export default function App() {
     show: false, icon: 'heart', scale: 48, color: '#0050cb', opacity: 1,
   });
   const [waterColor, setWaterColor] = useState('#bfbfbf');
+  const [boundaryConfig, setBoundaryConfig] = useState<BoundaryConfig>({
+    clip: true, border: false, borderWeight: 2, borderColor: '#1c1b1b',
+  });
 
   const handleAreaTooLarge = useCallback(() => {
     setAreaError('Area exceeds the maximum supported size. Please draw a smaller boundary.');
@@ -181,7 +189,7 @@ export default function App() {
       setPolygonLargeHint(false); // will be re-set by onPolygonLarge if applicable
       setViewport({ zoom: 1, panX: 0, panY: 0 });
       const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
-      generate(p, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap);
+      generate(p, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap, boundaryConfig.clip);
       setStep('customize');
     },
     [generate, style, streetConfig, labelTypography.baselineOffset],
@@ -192,7 +200,7 @@ export default function App() {
       setStyle(newStyle);
       if (polygon) {
         const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
-        generate(polygon, newStyle, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap);
+        generate(polygon, newStyle, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap, boundaryConfig.clip);
       }
     },
     [generate, polygon, streetConfig, labelTypography.baselineOffset],
@@ -204,7 +212,7 @@ export default function App() {
       setStreetConfig(next);
       if ('enabledGroups' in patch && polygon) {
         const { highwayTypes, groupMap } = resolvedStreetArgs(next);
-        generate(polygon, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap);
+        generate(polygon, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap, boundaryConfig.clip);
       }
     },
     [streetConfig, polygon, style, generate, labelTypography.baselineOffset],
@@ -218,11 +226,23 @@ export default function App() {
         if (labelOffsetTimerRef.current) clearTimeout(labelOffsetTimerRef.current);
         labelOffsetTimerRef.current = setTimeout(() => {
           const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
-          generate(polygon, style, highwayTypes, next.baselineOffset ?? 24, groupMap);
+          generate(polygon, style, highwayTypes, next.baselineOffset ?? 24, groupMap, boundaryConfig.clip);
         }, 400);
       }
     },
     [labelTypography, polygon, style, streetConfig, generate],
+  );
+
+  const handleBoundaryConfigChange = useCallback(
+    (patch: Partial<BoundaryConfig>) => {
+      const next = { ...boundaryConfig, ...patch };
+      setBoundaryConfig(next);
+      if ('clip' in patch && polygon) {
+        const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
+        generate(polygon, style, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap, next.clip);
+      }
+    },
+    [boundaryConfig, polygon, style, streetConfig, labelTypography.baselineOffset, generate],
   );
 
   // Keep viewportRef in sync for use in the non-passive wheel listener
@@ -287,7 +307,7 @@ export default function App() {
   const currentProductOption = PRODUCT_OPTIONS.find((o) => o.type === product)!;
   const priceCents = currentProductOption.retailPriceCents[size];
   const center = polygon ? polygonCenter(polygon) : null;
-  const displaySvg = applyStreetStyle(svg, streetConfig, labelTypography, waterColor);
+  const displaySvg = applyStreetStyle(svg, streetConfig, labelTypography, waterColor, boundaryConfig);
 
   return (
     <Layout step={step} onStepChange={setStep}>
@@ -491,6 +511,8 @@ export default function App() {
             onSymbolConfigChange={(patch) => setSymbolConfig((s) => ({ ...s, ...patch }))}
             waterColor={waterColor}
             onWaterColorChange={setWaterColor}
+            boundaryConfig={boundaryConfig}
+            onBoundaryConfigChange={handleBoundaryConfigChange}
             svg={displaySvg}
             draftId={draftId}
             loading={loading}

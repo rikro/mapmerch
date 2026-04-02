@@ -69,6 +69,13 @@ export interface StreetConfig {
   groupStyles: Record<StreetGroupId, StreetGroupStyle>;
 }
 
+export interface BoundaryConfig {
+  clip: boolean;
+  border: boolean;
+  borderWeight: number;
+  borderColor: string;
+}
+
 export interface ShippingAddress {
   name: string;
   address1: string;

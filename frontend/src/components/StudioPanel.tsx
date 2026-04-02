@@ -11,13 +11,14 @@ import {
   TypographyConfig, CoordsConfig, CoordFormat, CoordPosition,
   SymbolConfig, SymbolIcon,
   StreetConfig, StreetGroupId, StreetGroupStyle, DashStyle,
+  BoundaryConfig,
 } from '../types.js';
 import { STREET_GROUPS } from '../constants.js';
 
 export type StudioTab = 'streets' | 'typography' | 'coordinates' | 'symbols' | 'export';
 
 export const STUDIO_TABS: { id: StudioTab; label: string; icon: typeof Route }[] = [
-  { id: 'streets',     label: 'Streets',     icon: Route   },
+  { id: 'streets',     label: 'Design',      icon: Route   },
   { id: 'typography',  label: 'Typography',  icon: Type    },
   { id: 'coordinates', label: 'Coordinates', icon: MapPin  },
   { id: 'symbols',     label: 'Symbols',     icon: Heart   },
@@ -66,6 +67,8 @@ interface Props {
   onStreetConfigChange: (patch: Partial<StreetConfig>) => void;
   waterColor: string;
   onWaterColorChange: (color: string) => void;
+  boundaryConfig: BoundaryConfig;
+  onBoundaryConfigChange: (patch: Partial<BoundaryConfig>) => void;
   // Typography
   mapTitle: string;
   onMapTitleChange: (t: string) => void;
@@ -160,6 +163,7 @@ export default function StudioPanel({
   styleOptions, selectedStyle, onStyleChange,
   streetConfig, onStreetConfigChange,
   waterColor, onWaterColorChange,
+  boundaryConfig, onBoundaryConfigChange,
   mapTitle, onMapTitleChange,
   typography, onTypographyChange,
   labelTypography, onLabelTypographyChange,
@@ -172,10 +176,10 @@ export default function StudioPanel({
   return (
     <aside className="w-80 h-full bg-white border-l overflow-y-auto p-6 flex flex-col gap-8 flex-shrink-0">
 
-      {/* ── STREETS ── */}
+      {/* ── DESIGN ── */}
       {activeTab === 'streets' && (
         <div className="space-y-6">
-          <SectionHeader icon={Route} title="Streets" subtitle="Control which streets appear and how they're drawn" />
+          <SectionHeader icon={Route} title="Design" subtitle="Control street appearance, water, and boundary options" />
 
           <div className="space-y-3">
             <Label>Color Theme</Label>
@@ -345,6 +349,61 @@ export default function StudioPanel({
                 onChange={(c) => { if (c) onWaterColorChange(c); }}
               />
             </div>
+          </div>
+
+          {/* ── Boundary ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-slate-900">Clip to drawn boundary</span>
+              <Toggle on={boundaryConfig.clip} onToggle={() => onBoundaryConfigChange({ clip: !boundaryConfig.clip })} />
+            </div>
+
+            {boundaryConfig.clip && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">Show border</span>
+                  <Toggle on={boundaryConfig.border} onToggle={() => onBoundaryConfigChange({ border: !boundaryConfig.border })} />
+                </div>
+
+                {boundaryConfig.border && (
+                  <div className="bg-primary/5 rounded-lg px-3 pb-3 pt-2 space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <Label>Weight</Label>
+                        <span className="text-xs font-bold text-primary">{boundaryConfig.borderWeight}px</span>
+                      </div>
+                      <input
+                        type="range" min="0.5" max="12" step="0.5"
+                        className="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                        value={boundaryConfig.borderWeight}
+                        onChange={(e) => onBoundaryConfigChange({ borderWeight: parseFloat(e.target.value) })}
+                      />
+                      <div className="flex justify-between text-[9px] text-slate-400 font-medium">
+                        <span>Hairline</span>
+                        <span>Bold</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Color</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {COLOR_SWATCHES.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => onBoundaryConfigChange({ borderColor: c })}
+                            className={cn(
+                              'w-7 h-7 rounded-full border-2 transition-all',
+                              boundaryConfig.borderColor === c ? 'border-primary scale-110' : 'border-slate-200 hover:scale-105',
+                            )}
+                            style={{ background: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
