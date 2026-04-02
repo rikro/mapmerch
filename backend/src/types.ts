@@ -93,3 +93,6 @@ export interface CreateOrderRequest {
 
 // A single closed ring of [lng, lat] coordinate pairs describing a water body outline.
 export type WaterRing = [number, number][];
+
+// A single closed ring of [lng, lat] coordinate pairs describing a land mass outline.
+export type LandRing = [number, number][];
