@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { fetchStreetGeometry, fetchWaterGeometry } from '../services/geometryService.js';
+import { fetchLandGeometry } from '../data/landData.js';
 import { generateSvg } from '../services/artEngine.js';
 import { saveDraft } from '../services/draftStore.js';
 import { GenerateArtworkRequest, GenerateArtworkResponse } from '../types.js';
@@ -21,6 +22,9 @@ artworkRouter.post('/generate', async (req: Request, res: Response) => {
       fetchWaterGeometry(polygon),
     ]);
 
+    // fetchLandGeometry is synchronous — no need to include in Promise.all
+    const landRings = fetchLandGeometry(polygon);
+
     const filtered = highwayTypes?.length
       ? { ...streetData, features: streetData.features.filter(f => highwayTypes.includes(f.properties['highway'] as string)) }
       : streetData;
@@ -29,7 +33,7 @@ artworkRouter.post('/generate', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No streets of the selected types found in this area. Try enabling more street types.' });
     }
 
-    const svg = generateSvg(filtered, style, labelOffset, groupMap ?? {}, waterRings);
+    const svg = generateSvg(filtered, style, labelOffset, groupMap ?? {}, waterRings, landRings, polygon);
     const draft = saveDraft(sessionToken, polygon, style, svg);
     const response: GenerateArtworkResponse = { draftId: draft.id, svg };
     return res.json(response);
