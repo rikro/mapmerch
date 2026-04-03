@@ -126,7 +126,7 @@ function SectionHeader({ icon: Icon, title, subtitle }: {
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-primary" />
-        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
+        <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'rgba(15,23,42,0.8)' }} className="uppercase tracking-tight">{title}</h3>
       </div>
       <p className="text-xs text-slate-500">{subtitle}</p>
     </div>
@@ -150,7 +150,7 @@ function AccordionSection({ label, isOpen, onToggle, children }: {
         onClick={onToggle}
         className="w-full flex items-center justify-between py-3 text-left"
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(15,23,42,0.6)' }} className="uppercase tracking-widest">{label}</span>
         <span className={cn('text-[9px] text-slate-400 transition-transform duration-150 inline-block', isOpen && 'rotate-180')}>▼</span>
       </button>
       <div className={cn(
