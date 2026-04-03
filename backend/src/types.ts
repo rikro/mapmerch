@@ -25,7 +25,8 @@ export type StyleName =
   | 'minimal-line-art'
   | 'blueprint'
   | 'watercolor-wash'
-  | 'bold-graphic';
+  | 'bold-graphic'
+  | 'custom';
 
 export interface StylePreset {
   name: StyleName;

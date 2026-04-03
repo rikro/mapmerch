@@ -8,34 +8,35 @@ import StyleSelector from './StyleSelector.js';
 import { cn } from '../lib/utils.js';
 import {
   StyleName, StyleOption,
-  TypographyConfig, CoordsConfig, CoordFormat, CoordPosition,
+  TypographyConfig, CoordsConfig, CoordFormat,
   SymbolConfig, SymbolIcon,
   StreetConfig, StreetGroupId, StreetGroupStyle, DashStyle,
-  BoundaryConfig,
+  BoundaryConfig, CustomSlot,
 } from '../types.js';
 import { STREET_GROUPS } from '../constants.js';
 
-export type StudioTab = 'streets' | 'typography' | 'coordinates' | 'symbols' | 'export';
+export type StudioTab = 'streets' | 'typography' | 'symbols' | 'export';
 
 export const STUDIO_TABS: { id: StudioTab; label: string; icon: typeof Route }[] = [
-  { id: 'streets',     label: 'Design',      icon: Route   },
-  { id: 'typography',  label: 'Typography',  icon: Type    },
-  { id: 'coordinates', label: 'Coordinates', icon: MapPin  },
-  { id: 'symbols',     label: 'Symbols',     icon: Heart   },
-  { id: 'export',      label: 'Export',      icon: Share2  },
+  { id: 'streets',    label: 'Design',     icon: Route  },
+  { id: 'typography', label: 'Typography', icon: Type   },
+  { id: 'symbols',    label: 'Symbols',    icon: Heart  },
+  { id: 'export',     label: 'Export',     icon: Share2 },
 ];
 
-const TYPEFACES = ['Manrope', 'Inter', 'Space Grotesk', 'Georgia', 'Courier New'];
-const WEIGHTS   = [
-  { value: '400', label: 'Regular' },
-  { value: '600', label: 'SemiBold' },
-  { value: '700', label: 'Bold' },
-  { value: '800', label: 'ExtraBold' },
+const TYPEFACES = [
+  // Sans-serif
+  'Manrope', 'Inter', 'DM Sans', 'Nunito', 'Montserrat', 'Raleway',
+  // Display sans
+  'Oswald', 'Space Grotesk', 'Bebas Neue',
+  // Serif
+  'Georgia', 'Playfair Display', 'Lora', 'EB Garamond',
+  // Monospace
+  'Space Mono', 'Courier New',
 ];
-const COLOR_SWATCHES = [
-  '#1c1b1b', '#ffffff', '#0050cb', '#1a3a5c',
-  '#8b6f47', '#f5c518', '#1a1a1a', '#a8c8f0',
-];
+
+const WEIGHT_VALUES  = ['400', '600', '700', '800'];
+const WEIGHT_LABELS  = ['Regular', 'SemiBold', 'Bold', 'Extra Bold'];
 
 const SYMBOL_OPTIONS: { id: SymbolIcon; icon: typeof Heart; label: string }[] = [
   { id: 'heart', icon: Heart,  label: 'Heart' },
@@ -44,18 +45,22 @@ const SYMBOL_OPTIONS: { id: SymbolIcon; icon: typeof Heart; label: string }[] = 
   { id: 'zap',   icon: Zap,    label: 'Zap'   },
 ];
 
-const POSITIONS: { id: CoordPosition; label: string }[] = [
-  { id: 'top-left',     label: 'Top Left'     },
-  { id: 'top-right',    label: 'Top Right'    },
-  { id: 'bottom-left',  label: 'Bottom Left'  },
-  { id: 'bottom-right', label: 'Bottom Right' },
-];
-
 const DASH_OPTIONS: { id: DashStyle; label: string }[] = [
   { id: 'solid',  label: 'Solid'  },
   { id: 'dashed', label: 'Dashed' },
   { id: 'dotted', label: 'Dotted' },
 ];
+
+type PendingAction =
+  | { type: 'builtin'; style: StyleName }
+  | { type: 'slot'; slot: CustomSlot };
+
+const CUSTOM_SLOTS_KEY = 'mapmerch_custom_slots';
+
+function loadCustomSlots(): CustomSlot[] {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_SLOTS_KEY) ?? '[]'); }
+  catch { return []; }
+}
 
 interface Props {
   activeTab: StudioTab;
@@ -63,15 +68,20 @@ interface Props {
   styleOptions: StyleOption[];
   selectedStyle: StyleName;
   onStyleChange: (s: StyleName) => void;
+  onApplyDesignPreset: (style: StyleName, streetConfig: StreetConfig, waterColor: string, boundaryConfig: BoundaryConfig, landColor: string) => void;
   streetConfig: StreetConfig;
   onStreetConfigChange: (patch: Partial<StreetConfig>) => void;
   waterColor: string;
   onWaterColorChange: (color: string) => void;
+  landColor: string;
+  onLandColorChange: (color: string) => void;
   boundaryConfig: BoundaryConfig;
   onBoundaryConfigChange: (patch: Partial<BoundaryConfig>) => void;
   // Typography
   mapTitle: string;
   onMapTitleChange: (t: string) => void;
+  titlePosition: 'top' | 'bottom';
+  onTitlePositionChange: (p: 'top' | 'bottom') => void;
   typography: TypographyConfig;
   onTypographyChange: (patch: Partial<TypographyConfig>) => void;
   labelTypography: TypographyConfig;
@@ -79,6 +89,8 @@ interface Props {
   // Coordinates
   coordsConfig: CoordsConfig;
   onCoordsConfigChange: (patch: Partial<CoordsConfig>) => void;
+  coordTypography: TypographyConfig;
+  onCoordTypographyChange: (patch: Partial<TypographyConfig>) => void;
   // Symbols
   symbolConfig: SymbolConfig;
   onSymbolConfigChange: (patch: Partial<SymbolConfig>) => void;
@@ -129,6 +141,77 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AccordionSection({ label, isOpen, onToggle, children }: {
+  label: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-slate-100 last:border-0">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between py-3 text-left"
+      >
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
+        <span className={cn('text-[9px] text-slate-400 transition-transform duration-150 inline-block', isOpen && 'rotate-180')}>▼</span>
+      </button>
+      <div className={cn(
+        'overflow-hidden transition-all duration-150',
+        isOpen ? 'max-h-[2000px]' : 'max-h-0',
+      )}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SizeSlider({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (s: number) => void }) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const dragging = React.useRef(false);
+  React.useEffect(() => {
+    if (!dragging.current && inputRef.current) inputRef.current.value = String(value);
+  }, [value]);
+  return (
+    <input
+      ref={inputRef}
+      type="range" min={min} max={max} step="any"
+      defaultValue={value}
+      onPointerDown={() => { dragging.current = true; }}
+      onPointerUp={() => { dragging.current = false; }}
+      onChange={(e) => onChange(Math.round(parseFloat(e.target.value)))}
+      className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
+    />
+  );
+}
+
+function WeightSlider({ value, onChange }: { value: string; onChange: (w: string) => void }) {
+  const toIdx = (v: string) => Math.max(0, WEIGHT_VALUES.indexOf(v));
+  const [local, setLocal] = React.useState(() => toIdx(value));
+
+  // Keep in sync when value changes externally (e.g. slot restore)
+  React.useEffect(() => { setLocal(toIdx(value)); }, [value]);
+
+  const commit = () => {
+    const snapped = Math.max(0, Math.min(3, Math.round(local)));
+    setLocal(snapped);
+    onChange(WEIGHT_VALUES[snapped]);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <input
+        type="range" min={0} max={3} step={0.01}
+        value={local}
+        onChange={(e) => setLocal(parseFloat(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
+      />
+      <div className="flex justify-between text-[9px] text-slate-400 font-medium">
+        {WEIGHT_LABELS.map(l => <span key={l}>{l}</span>)}
+      </div>
+    </div>
+  );
+}
+
 function downloadSvg(svg: string) {
   const printable = svg.replace(/width="100%"\s*height="100%"/, 'width="2400" height="2400"');
   const blob = new Blob([printable], { type: 'image/svg+xml' });
@@ -158,469 +241,459 @@ function GroupLinePreview({ groupStyle }: { groupStyle: StreetGroupStyle }) {
   );
 }
 
+function TypoControls({
+  typo, onChange, sizeMin, sizeMax, allowAutoColor,
+}: {
+  typo: TypographyConfig;
+  onChange: (p: Partial<TypographyConfig>) => void;
+  sizeMin: number; sizeMax: number;
+  allowAutoColor?: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>Typeface</Label>
+        <select
+          className="w-full bg-slate-50 border-none rounded-lg p-2.5 text-sm font-medium outline-none"
+          value={typo.typeface}
+          onChange={(e) => onChange({ typeface: e.target.value })}
+        >
+          {TYPEFACES.map((f) => <option key={f}>{f}</option>)}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Weight</Label>
+        <WeightSlider value={typo.weight} onChange={(w) => onChange({ weight: w })} />
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center">
+          <Label>Size</Label>
+          <span className="text-xs font-bold text-primary">{typo.size}px</span>
+        </div>
+        <SizeSlider value={typo.size} min={sizeMin} max={sizeMax} onChange={(s) => onChange({ size: s })} />
+      </div>
+      <div className="flex items-center gap-2">
+        <Label>
+          Color
+          {allowAutoColor && !typo.color && <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>}
+        </Label>
+        <ColorPalette
+          value={typo.color || null}
+          onChange={(c) => onChange({ color: c ?? '' })}
+          allowAuto={allowAutoColor}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function StudioPanel({
   activeTab,
-  styleOptions, selectedStyle, onStyleChange,
+  styleOptions, selectedStyle, onStyleChange, onApplyDesignPreset,
   streetConfig, onStreetConfigChange,
   waterColor, onWaterColorChange,
+  landColor, onLandColorChange,
   boundaryConfig, onBoundaryConfigChange,
   mapTitle, onMapTitleChange,
+  titlePosition, onTitlePositionChange,
   typography, onTypographyChange,
   labelTypography, onLabelTypographyChange,
   coordsConfig, onCoordsConfigChange,
+  coordTypography, onCoordTypographyChange,
   symbolConfig, onSymbolConfigChange,
   svg, draftId, loading, onProceedToCheckout,
 }: Props) {
-  const [activeTextElement, setActiveTextElement] = React.useState<'title' | 'labels'>('title');
   const [expandedGroups, setExpandedGroups] = React.useState<Set<StreetGroupId>>(new Set());
+  const [openDesignSection, setOpenDesignSection] = React.useState<string | null>('theme');
+  const [openTypoSection, setOpenTypoSection] = React.useState<string | null>('labels');
+
+  // ── Dirty / theme-switch guard ─────────────────────────────────────────────
+  const [isDirty, setIsDirty] = React.useState(false);
+  const [pendingAction, setPendingAction] = React.useState<PendingAction | null>(null);
+  const [showSlotPicker, setShowSlotPicker] = React.useState(false);
+  const [customSlots, setCustomSlots] = React.useState<CustomSlot[]>(loadCustomSlots);
+
+  const persistSlots = (slots: CustomSlot[]) => {
+    setCustomSlots(slots);
+    localStorage.setItem(CUSTOM_SLOTS_KEY, JSON.stringify(slots));
+  };
+
+  // Dirty-aware wrappers for design controls
+  const dirtyStreetConfig = (patch: Partial<StreetConfig>)   => { setIsDirty(true); onStreetConfigChange(patch); };
+  const dirtyWaterColor   = (c: string)                      => { setIsDirty(true); onWaterColorChange(c); };
+  const dirtyLandColor    = (c: string | null)               => { setIsDirty(true); onLandColorChange(c ?? ''); };
+  const dirtyBoundary     = (patch: Partial<BoundaryConfig>) => { setIsDirty(true); onBoundaryConfigChange(patch); };
+
+  // Intercept theme/slot selection
+  const requestStyle = (newStyle: StyleName) => {
+    if (newStyle === selectedStyle && !isDirty) return;
+    if (isDirty) { setPendingAction({ type: 'builtin', style: newStyle }); setShowSlotPicker(false); }
+    else { onStyleChange(newStyle); }
+  };
+
+  const requestSlot = (slot: CustomSlot) => {
+    if (isDirty) { setPendingAction({ type: 'slot', slot }); setShowSlotPicker(false); }
+    else { applySlot(slot); }
+  };
+
+  const applySlot = (slot: CustomSlot) => {
+    onApplyDesignPreset(slot.baseStyle, slot.streetConfig, slot.waterColor, slot.boundaryConfig, slot.landColor ?? '');
+    setIsDirty(false);
+  };
+
+  const confirmSwitch = () => {
+    if (!pendingAction) return;
+    if (pendingAction.type === 'builtin') onStyleChange(pendingAction.style);
+    else applySlot(pendingAction.slot);
+    setIsDirty(false);
+    setPendingAction(null);
+    setShowSlotPicker(false);
+  };
+
+  const saveToSlot = (id: 1 | 2 | 3) => {
+    const slot: CustomSlot = {
+      id, label: `Custom ${id}`,
+      baseStyle: selectedStyle,
+      streetConfig, waterColor, landColor, boundaryConfig,
+    };
+    persistSlots([...customSlots.filter(s => s.id !== id), slot].sort((a, b) => a.id - b.id));
+    confirmSwitch();
+  };
   return (
     <aside className="w-80 h-full bg-white border-l overflow-y-auto p-6 flex flex-col gap-8 flex-shrink-0">
 
       {/* ── DESIGN ── */}
-      {activeTab === 'streets' && (
-        <div className="space-y-6">
-          <SectionHeader icon={Route} title="Design" subtitle="Control street appearance, water, and boundary options" />
+      {activeTab === 'streets' && (() => {
+        const toggle = (id: string) =>
+          setOpenDesignSection(prev => prev === id ? null : id);
 
-          <div className="space-y-3">
-            <Label>Color Theme</Label>
-            <StyleSelector options={styleOptions} selected={selectedStyle} onChange={onStyleChange} />
-          </div>
+        return (
+          <div className="space-y-0">
+            <SectionHeader icon={Route} title="Design" subtitle="Control street appearance, water, and boundary options" />
 
-          <div className="space-y-3">
-            <Label>Street Types</Label>
-            <div className="space-y-0.5">
-              {STREET_GROUPS.map(({ id, label }) => {
-                const groupId = id as StreetGroupId;
-                const isEnabled = streetConfig.enabledGroups.includes(groupId);
-                const isExpanded = expandedGroups.has(groupId);
-                const groupStyle = streetConfig.groupStyles[groupId];
+            {/* Theme */}
+            <AccordionSection label="Theme" isOpen={openDesignSection === 'theme'} onToggle={() => toggle('theme')}>
+              <div className="pb-4">
+                <StyleSelector
+                  options={styleOptions}
+                  selected={selectedStyle}
+                  onChange={requestStyle}
+                  customSlots={customSlots}
+                  onCustomSlotSelect={requestSlot}
+                />
+              </div>
+            </AccordionSection>
 
-                const toggleEnabled = () => {
-                  const groups = isEnabled
-                    ? streetConfig.enabledGroups.filter(g => g !== groupId)
-                    : [...streetConfig.enabledGroups, groupId];
-                  onStreetConfigChange({ enabledGroups: groups });
-                };
+            {/* Streets */}
+            <AccordionSection label="Streets" isOpen={openDesignSection === 'streets'} onToggle={() => toggle('streets')}>
+              <div className="pb-4 space-y-0.5">
+                {STREET_GROUPS.map(({ id, label }) => {
+                  const groupId = id as StreetGroupId;
+                  const isEnabled = streetConfig.enabledGroups.includes(groupId);
+                  const isExpanded = expandedGroups.has(groupId);
+                  const groupStyle = streetConfig.groupStyles[groupId];
 
-                const toggleExpanded = () => {
-                  setExpandedGroups(prev => {
-                    const next = new Set(prev);
-                    next.has(groupId) ? next.delete(groupId) : next.add(groupId);
-                    return next;
-                  });
-                };
+                  const toggleEnabled = () => {
+                    const groups = isEnabled
+                      ? streetConfig.enabledGroups.filter(g => g !== groupId)
+                      : [...streetConfig.enabledGroups, groupId];
+                    dirtyStreetConfig({ enabledGroups: groups });
+                  };
 
-                const patchGroupStyle = (patch: Partial<StreetGroupStyle>) => {
-                  onStreetConfigChange({
-                    groupStyles: {
-                      ...streetConfig.groupStyles,
-                      [groupId]: { ...groupStyle, ...patch },
-                    },
-                  });
-                };
+                  const toggleExpanded = () => {
+                    setExpandedGroups(prev => {
+                      const next = new Set(prev);
+                      next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+                      return next;
+                    });
+                  };
 
-                return (
-                  <div key={id}>
-                    {/* Row */}
-                    <div className={cn(
-                      'flex items-center gap-2 py-2 px-1.5 rounded-lg',
-                      isExpanded ? 'bg-primary/5 rounded-b-none' : 'hover:bg-slate-50',
-                    )}>
-                      {/* Checkbox */}
-                      <button
-                        onClick={toggleEnabled}
-                        className={cn(
-                          'w-[17px] h-[17px] rounded-[5px] border-2 flex items-center justify-center flex-shrink-0 transition-colors',
-                          isEnabled ? 'bg-primary border-primary' : 'bg-white border-slate-300',
-                        )}
-                      >
-                        {isEnabled && (
-                          <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="white" strokeWidth="2.8">
-                            <polyline points="2,6 5,9 10,3"/>
-                          </svg>
-                        )}
-                      </button>
+                  const patchGroupStyle = (patch: Partial<StreetGroupStyle>) => {
+                    dirtyStreetConfig({
+                      groupStyles: {
+                        ...streetConfig.groupStyles,
+                        [groupId]: { ...groupStyle, ...patch },
+                      },
+                    });
+                  };
 
-                      {/* Label */}
-                      <span
-                        onClick={toggleExpanded}
-                        className={cn(
-                          'text-sm font-medium flex-1 cursor-pointer',
-                          isEnabled ? 'text-slate-700' : 'text-slate-400',
-                        )}
-                      >
-                        {label}
-                      </span>
+                  return (
+                    <div key={id}>
+                      <div className={cn(
+                        'flex items-center gap-2 py-2 px-1.5 rounded-lg',
+                        isExpanded ? 'bg-primary/5 rounded-b-none' : 'hover:bg-slate-50',
+                      )}>
+                        <button
+                          onClick={toggleEnabled}
+                          className={cn(
+                            'w-[17px] h-[17px] rounded-[5px] border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                            isEnabled ? 'bg-primary border-primary' : 'bg-white border-slate-300',
+                          )}
+                        >
+                          {isEnabled && (
+                            <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="white" strokeWidth="2.8">
+                              <polyline points="2,6 5,9 10,3"/>
+                            </svg>
+                          )}
+                        </button>
+                        <span
+                          onClick={toggleExpanded}
+                          className={cn(
+                            'text-sm font-medium flex-1 cursor-pointer',
+                            isEnabled ? 'text-slate-700' : 'text-slate-400',
+                          )}
+                        >
+                          {label}
+                        </span>
+                        <button
+                          onClick={toggleExpanded}
+                          className={cn('flex-shrink-0', !isEnabled && 'opacity-30')}
+                        >
+                          <GroupLinePreview groupStyle={groupStyle} />
+                        </button>
+                        <button
+                          onClick={toggleExpanded}
+                          className={cn(
+                            'text-[9px] flex-shrink-0 transition-colors w-4 text-center',
+                            isExpanded ? 'text-primary' : 'text-slate-400',
+                          )}
+                        >
+                          {isExpanded ? '▲' : '▼'}
+                        </button>
+                      </div>
 
-                      {/* Mini line preview */}
-                      <button
-                        onClick={toggleExpanded}
-                        className={cn('flex-shrink-0', !isEnabled && 'opacity-30')}
-                      >
-                        <GroupLinePreview groupStyle={groupStyle} />
-                      </button>
+                      {isExpanded && (
+                        <div className="bg-primary/5 rounded-b-lg px-3 pb-3 pt-2 space-y-3 border-t border-primary/10">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <Label>Weight</Label>
+                              <span className="text-xs font-bold text-primary">{groupStyle.strokeWidth}px</span>
+                            </div>
+                            <input
+                              type="range" min="0.5" max="12" step="0.5"
+                              className="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                              value={groupStyle.strokeWidth}
+                              onChange={(e) => patchGroupStyle({ strokeWidth: parseFloat(e.target.value) })}
+                            />
+                            <div className="flex justify-between text-[9px] text-slate-400 font-medium">
+                              <span>Hairline</span>
+                              <span>Bold</span>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Style</Label>
+                            <div className="flex gap-1.5">
+                              {DASH_OPTIONS.map(({ id: dashId, label: dashLabel }) => (
+                                <button
+                                  key={dashId}
+                                  onClick={() => patchGroupStyle({ dashStyle: dashId })}
+                                  className={cn(
+                                    'flex-1 py-1.5 text-xs font-bold rounded-lg border-2 transition-all',
+                                    groupStyle.dashStyle === dashId
+                                      ? 'border-primary bg-primary/10 text-primary'
+                                      : 'border-transparent bg-white text-slate-600 hover:bg-slate-50',
+                                  )}
+                                >
+                                  {dashLabel}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <Label>
+                                Color
+                                {!groupStyle.color && (
+                                  <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>
+                                )}
+                              </Label>
+                              <ColorPalette
+                                value={groupStyle.color}
+                                onChange={(c) => patchGroupStyle({ color: c })}
+                                allowAuto
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-slate-400 leading-relaxed mt-2">
+                  Toggling a street type regenerates the artwork. Style changes apply instantly.
+                </p>
+              </div>
+            </AccordionSection>
 
-                      {/* Chevron */}
-                      <button
-                        onClick={toggleExpanded}
-                        className={cn(
-                          'text-[9px] flex-shrink-0 transition-colors w-4 text-center',
-                          isExpanded ? 'text-primary' : 'text-slate-400',
-                        )}
-                      >
-                        {isExpanded ? '▲' : '▼'}
-                      </button>
+            {/* Water & Land */}
+            <AccordionSection label="Water & Land" isOpen={openDesignSection === 'water'} onToggle={() => toggle('water')}>
+              <div className="pb-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Label>Water Color</Label>
+                  <ColorPalette
+                    value={waterColor}
+                    onChange={(c) => { if (c) dirtyWaterColor(c); }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label>
+                    Land Color
+                    {!landColor && <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>}
+                  </Label>
+                  <ColorPalette
+                    value={landColor || null}
+                    onChange={dirtyLandColor}
+                    allowAuto
+                  />
+                </div>
+              </div>
+            </AccordionSection>
+
+            {/* Boundary */}
+            <AccordionSection label="Boundary" isOpen={openDesignSection === 'boundary'} onToggle={() => toggle('boundary')}>
+              <div className="pb-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-900">Clip to drawn boundary</span>
+                  <Toggle on={boundaryConfig.clip} onToggle={() => dirtyBoundary({ clip: !boundaryConfig.clip })} />
+                </div>
+
+                {boundaryConfig.clip && (
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-slate-700">Show border</span>
+                      <Toggle on={boundaryConfig.border} onToggle={() => dirtyBoundary({ border: !boundaryConfig.border })} />
                     </div>
 
-                    {/* Inline controls */}
-                    {isExpanded && (
-                      <div className="bg-primary/5 rounded-b-lg px-3 pb-3 pt-2 space-y-3 border-t border-primary/10">
-                        {/* Weight */}
+                    {boundaryConfig.border && (
+                      <div className="bg-primary/5 rounded-lg px-3 pb-3 pt-2 space-y-3">
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
                             <Label>Weight</Label>
-                            <span className="text-xs font-bold text-primary">{groupStyle.strokeWidth}px</span>
+                            <span className="text-xs font-bold text-primary">{boundaryConfig.borderWeight}px</span>
                           </div>
                           <input
-                            type="range" min="0.5" max="12" step="0.5"
+                            type="range" min="0.5" max="50" step="0.5"
                             className="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
-                            value={groupStyle.strokeWidth}
-                            onChange={(e) => patchGroupStyle({ strokeWidth: parseFloat(e.target.value) })}
+                            value={boundaryConfig.borderWeight}
+                            onChange={(e) => dirtyBoundary({ borderWeight: parseFloat(e.target.value) })}
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 font-medium">
                             <span>Hairline</span>
                             <span>Bold</span>
                           </div>
                         </div>
-
-                        {/* Dash style */}
-                        <div className="space-y-1.5">
-                          <Label>Style</Label>
-                          <div className="flex gap-1.5">
-                            {DASH_OPTIONS.map(({ id: dashId, label: dashLabel }) => (
-                              <button
-                                key={dashId}
-                                onClick={() => patchGroupStyle({ dashStyle: dashId })}
-                                className={cn(
-                                  'flex-1 py-1.5 text-xs font-bold rounded-lg border-2 transition-all',
-                                  groupStyle.dashStyle === dashId
-                                    ? 'border-primary bg-primary/10 text-primary'
-                                    : 'border-transparent bg-white text-slate-600 hover:bg-slate-50',
-                                )}
-                              >
-                                {dashLabel}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Color */}
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <Label>
-                              Color
-                              {!groupStyle.color && (
-                                <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>
-                              )}
-                            </Label>
+                            <Label>Color</Label>
                             <ColorPalette
-                              value={groupStyle.color}
-                              onChange={(c) => patchGroupStyle({ color: c })}
-                              allowAuto
+                              value={boundaryConfig.borderColor}
+                              onChange={(c) => { if (c) dirtyBoundary({ borderColor: c }); }}
                             />
                           </div>
                         </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-slate-400 leading-relaxed">
-              Toggling a street type regenerates the artwork. Style changes apply instantly.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <Label>Water Fill</Label>
-              <ColorPalette
-                value={waterColor}
-                onChange={(c) => { if (c) onWaterColorChange(c); }}
-              />
-            </div>
-          </div>
-
-          {/* ── Boundary ── */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-900">Clip to drawn boundary</span>
-              <Toggle on={boundaryConfig.clip} onToggle={() => onBoundaryConfigChange({ clip: !boundaryConfig.clip })} />
-            </div>
-
-            {boundaryConfig.clip && (
-              <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">Show border</span>
-                  <Toggle on={boundaryConfig.border} onToggle={() => onBoundaryConfigChange({ border: !boundaryConfig.border })} />
-                </div>
-
-                {boundaryConfig.border && (
-                  <div className="bg-primary/5 rounded-lg px-3 pb-3 pt-2 space-y-3">
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <Label>Weight</Label>
-                        <span className="text-xs font-bold text-primary">{boundaryConfig.borderWeight}px</span>
-                      </div>
-                      <input
-                        type="range" min="0.5" max="12" step="0.5"
-                        className="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary"
-                        value={boundaryConfig.borderWeight}
-                        onChange={(e) => onBoundaryConfigChange({ borderWeight: parseFloat(e.target.value) })}
-                      />
-                      <div className="flex justify-between text-[9px] text-slate-400 font-medium">
-                        <span>Hairline</span>
-                        <span>Bold</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label>Color</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {COLOR_SWATCHES.map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => onBoundaryConfigChange({ borderColor: c })}
-                            className={cn(
-                              'w-7 h-7 rounded-full border-2 transition-all',
-                              boundaryConfig.borderColor === c ? 'border-primary scale-110' : 'border-slate-200 hover:scale-105',
-                            )}
-                            style={{ background: c }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── TYPOGRAPHY ── */}
-      {activeTab === 'typography' && (() => {
-        const isTitle = activeTextElement === 'title';
-        const activeTypo = isTitle ? typography : labelTypography;
-        const onChange = isTitle ? onTypographyChange : onLabelTypographyChange;
-        const sizeMin = isTitle ? 10 : 20;
-        const sizeMax = isTitle ? 48 : 80;
-
-        return (
-          <div className="space-y-6">
-            <SectionHeader icon={Type} title="Typography" subtitle="Configure text elements on your map art" />
-
-            {/* Element toggle */}
-            <div className="space-y-3">
-              <Label>Edit Element</Label>
-              <div className="flex gap-2">
-                {([
-                  { id: 'title',  label: 'Map Title'      },
-                  { id: 'labels', label: 'Street Labels'  },
-                ] as const).map(({ id, label }) => (
-                  <button
-                    key={id}
-                    onClick={() => setActiveTextElement(id)}
-                    className={cn(
-                      'flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all',
-                      activeTextElement === id
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Map title input — only for title element */}
-            {isTitle && (
-              <div className="space-y-3">
-                <Label>Title Text</Label>
-                <input
-                  className="w-full bg-slate-50 border-none rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-                  placeholder="e.g. Lower East Side, NYC"
-                  value={mapTitle}
-                  onChange={(e) => onMapTitleChange(e.target.value)}
-                />
-                <p className="text-[10px] text-slate-400">Appears as an overlay on the canvas preview</p>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <Label>Typeface</Label>
-              <select
-                className="w-full bg-slate-50 border-none rounded-lg p-3 text-sm font-medium outline-none"
-                value={activeTypo.typeface}
-                onChange={(e) => onChange({ typeface: e.target.value })}
-              >
-                {TYPEFACES.map((f) => <option key={f}>{f}</option>)}
-              </select>
-            </div>
-
-            <div className="space-y-3">
-              <Label>Weight</Label>
-              <div className="flex flex-wrap gap-2">
-                {WEIGHTS.map((w) => (
-                  <button
-                    key={w.value}
-                    onClick={() => onChange({ weight: w.value })}
-                    className={cn(
-                      'px-3 py-1.5 rounded-lg text-xs border-2 transition-all',
-                      activeTypo.weight === w.value
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
-                    )}
-                  >
-                    {w.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <Label>Size</Label>
-                <span className="text-xs font-bold text-primary">{activeTypo.size}px</span>
-              </div>
-              <input
-                type="range" min={sizeMin} max={sizeMax}
-                className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
-                value={activeTypo.size}
-                onChange={(e) => onChange({ size: parseInt(e.target.value) })}
-              />
-            </div>
-
-            {false && !isTitle && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <Label>Offset Above Line</Label>
-                  <span className="text-xs font-bold text-primary">{activeTypo.baselineOffset ?? 12}px</span>
-                </div>
-                <input
-                  type="range" min="0" max="80" step="1"
-                  className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
-                  value={activeTypo.baselineOffset ?? 12}
-                  onChange={(e) => onChange({ baselineOffset: parseInt(e.target.value) })}
-                />
-                <div className="flex justify-between text-[9px] text-slate-400 font-medium">
-                  <span>On line</span>
-                  <span>Above</span>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <Label>Color{!isTitle && !activeTypo.color && <span className="ml-1 normal-case font-normal text-slate-400">(follows theme)</span>}</Label>
-              <div className="flex flex-wrap gap-2">
-                {!isTitle && (
-                  <button
-                    onClick={() => onChange({ color: '' })}
-                    title="Follow color theme"
-                    className={cn(
-                      'w-7 h-7 rounded-full border-2 transition-all flex items-center justify-center text-[9px] font-bold',
-                      !activeTypo.color ? 'border-primary scale-110 text-primary' : 'border-slate-200 text-slate-400 hover:scale-105',
-                    )}
-                  >
-                    Auto
-                  </button>
-                )}
-                {COLOR_SWATCHES.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => onChange({ color: c })}
-                    className={cn(
-                      'w-7 h-7 rounded-full border-2 transition-all',
-                      activeTypo.color === c ? 'border-primary scale-110' : 'border-slate-200 hover:scale-105',
-                    )}
-                    style={{ background: c }}
-                  />
-                ))}
-              </div>
-            </div>
+            </AccordionSection>
           </div>
         );
       })()}
 
-      {/* ── COORDINATES ── */}
-      {activeTab === 'coordinates' && (
-        <div className="space-y-6">
-          <SectionHeader icon={MapPin} title="Coordinates" subtitle="Display map coordinates on the canvas" />
+      {/* ── TYPOGRAPHY ── */}
+      {activeTab === 'typography' && (() => {
+        const toggleTypo = (id: string) =>
+          setOpenTypoSection(prev => prev === id ? null : id);
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-900">Show Coordinates</span>
-            <Toggle on={coordsConfig.show} onToggle={() => onCoordsConfigChange({ show: !coordsConfig.show })} />
+        return (
+          <div className="space-y-0">
+            <SectionHeader icon={Type} title="Typography" subtitle="Configure text elements on your map art" />
+
+            {/* Street Labels */}
+            <AccordionSection label="Street Labels" isOpen={openTypoSection === 'labels'} onToggle={() => toggleTypo('labels')}>
+              <div className="pb-4">
+                <TypoControls typo={labelTypography} onChange={onLabelTypographyChange} sizeMin={20} sizeMax={80} allowAutoColor />
+              </div>
+            </AccordionSection>
+
+            {/* Map Title */}
+            <AccordionSection label="Map Title" isOpen={openTypoSection === 'title'} onToggle={() => toggleTypo('title')}>
+              <div className="pb-4 space-y-4">
+                <div className="space-y-1.5">
+                  <Label>Title Text</Label>
+                  <input
+                    className="w-full bg-slate-50 border-none rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
+                    placeholder="e.g. Lower East Side, NYC"
+                    value={mapTitle}
+                    onChange={(e) => onMapTitleChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Position</Label>
+                  <div className="flex gap-2">
+                    {(['top', 'bottom'] as const).map(p => (
+                      <button key={p} onClick={() => onTitlePositionChange(p)}
+                        className={cn('flex-1 py-1.5 text-xs font-bold rounded-lg border-2 capitalize transition-all',
+                          titlePosition === p ? 'border-primary bg-primary/5 text-primary' : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100')}
+                      >{p}</button>
+                    ))}
+                  </div>
+                </div>
+                <TypoControls typo={typography} onChange={onTypographyChange} sizeMin={10} sizeMax={48} />
+              </div>
+            </AccordionSection>
+
+            {/* Coordinates */}
+            <AccordionSection label="Coordinates" isOpen={openTypoSection === 'coords'} onToggle={() => toggleTypo('coords')}>
+              <div className="pb-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-900">Show Coordinates</span>
+                  <Toggle on={coordsConfig.show} onToggle={() => onCoordsConfigChange({ show: !coordsConfig.show })} />
+                </div>
+                {coordsConfig.show && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>Format</Label>
+                      <div className="flex gap-2">
+                        {(['Decimal Degrees', 'DMS'] as CoordFormat[]).map(f => (
+                          <button key={f} onClick={() => onCoordsConfigChange({ format: f })}
+                            className={cn('flex-1 py-1.5 text-xs font-bold rounded-lg border-2 transition-all',
+                              coordsConfig.format === f ? 'border-primary bg-primary/5 text-primary' : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100')}
+                          >{f}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Position</Label>
+                      <div className="flex gap-2">
+                        {(['top', 'bottom'] as const).map(p => (
+                          <button key={p} onClick={() => onCoordsConfigChange({ position: p })}
+                            className={cn('flex-1 py-1.5 text-xs font-bold rounded-lg border-2 capitalize transition-all',
+                              coordsConfig.position === p ? 'border-primary bg-primary/5 text-primary' : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100')}
+                          >{p}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <Label>Opacity</Label>
+                        <span className="text-xs font-bold text-primary">{Math.round(coordsConfig.opacity * 100)}%</span>
+                      </div>
+                      <input type="range" min="20" max="100" step="0.1"
+                        className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
+                        value={Math.round(coordsConfig.opacity * 100)}
+                        onChange={(e) => onCoordsConfigChange({ opacity: Math.round(parseFloat(e.target.value)) / 100 })}
+                      />
+                    </div>
+                    <TypoControls typo={coordTypography} onChange={onCoordTypographyChange} sizeMin={8} sizeMax={24} allowAutoColor />
+                  </>
+                )}
+              </div>
+            </AccordionSection>
           </div>
-
-          {coordsConfig.show && (
-            <>
-              <div className="space-y-3">
-                <Label>Format</Label>
-                <div className="flex gap-2">
-                  {(['Decimal Degrees', 'DMS'] as CoordFormat[]).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => onCoordsConfigChange({ format: f })}
-                      className={cn(
-                        'flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all',
-                        coordsConfig.format === f
-                          ? 'border-primary bg-primary/5 text-primary'
-                          : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
-                      )}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Position</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {POSITIONS.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => onCoordsConfigChange({ position: p.id })}
-                      className={cn(
-                        'py-2 text-xs font-semibold rounded-lg border-2 transition-all',
-                        coordsConfig.position === p.id
-                          ? 'border-primary bg-primary/5 text-primary'
-                          : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100',
-                      )}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <Label>Opacity</Label>
-                  <span className="text-xs font-bold text-primary">{Math.round(coordsConfig.opacity * 100)}%</span>
-                </div>
-                <input
-                  type="range" min="20" max="100"
-                  className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
-                  value={Math.round(coordsConfig.opacity * 100)}
-                  onChange={(e) => onCoordsConfigChange({ opacity: parseInt(e.target.value) / 100 })}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── SYMBOLS ── */}
       {activeTab === 'symbols' && (
@@ -662,27 +735,20 @@ export default function StudioPanel({
                   <span className="text-xs font-bold text-primary">{symbolConfig.scale}px</span>
                 </div>
                 <input
-                  type="range" min="24" max="120"
+                  type="range" min="24" max="120" step="0.1"
                   className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
                   value={symbolConfig.scale}
-                  onChange={(e) => onSymbolConfigChange({ scale: parseInt(e.target.value) })}
+                  onChange={(e) => onSymbolConfigChange({ scale: Math.round(parseFloat(e.target.value)) })}
                 />
               </div>
 
-              <div className="space-y-3">
-                <Label>Color</Label>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_SWATCHES.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => onSymbolConfigChange({ color: c })}
-                      className={cn(
-                        'w-7 h-7 rounded-full border-2 transition-all',
-                        symbolConfig.color === c ? 'border-primary scale-110' : 'border-slate-200 hover:scale-105',
-                      )}
-                      style={{ background: c }}
-                    />
-                  ))}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Label>Color</Label>
+                  <ColorPalette
+                    value={symbolConfig.color}
+                    onChange={(c) => { if (c) onSymbolConfigChange({ color: c }); }}
+                  />
                 </div>
               </div>
 
@@ -692,10 +758,10 @@ export default function StudioPanel({
                   <span className="text-xs font-bold text-primary">{Math.round(symbolConfig.opacity * 100)}%</span>
                 </div>
                 <input
-                  type="range" min="10" max="100"
+                  type="range" min="10" max="100" step="0.1"
                   className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary"
                   value={Math.round(symbolConfig.opacity * 100)}
-                  onChange={(e) => onSymbolConfigChange({ opacity: parseInt(e.target.value) / 100 })}
+                  onChange={(e) => onSymbolConfigChange({ opacity: Math.round(parseFloat(e.target.value)) / 100 })}
                 />
               </div>
             </>
@@ -750,6 +816,80 @@ export default function StudioPanel({
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* ── Theme-switch guard dialog ── */}
+      {pendingAction && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) { setPendingAction(null); setShowSlotPicker(false); } }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-80 p-6 space-y-4">
+            {!showSlotPicker ? (
+              <>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-slate-900">Unsaved Style Changes</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Switching themes will discard your current color and style edits.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setShowSlotPicker(true)}
+                    className="w-full py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors"
+                  >
+                    Save to Custom Slot&hellip;
+                  </button>
+                  <button
+                    onClick={confirmSwitch}
+                    className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    Discard &amp; Switch
+                  </button>
+                  <button
+                    onClick={() => { setPendingAction(null); setShowSlotPicker(false); }}
+                    className="w-full py-2.5 text-slate-400 rounded-xl text-xs font-semibold hover:text-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-slate-900">Save to Custom Slot</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Choose a slot. Occupied slots will be overwritten.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {([1, 2, 3] as const).map((id) => {
+                    const existing = customSlots.find(s => s.id === id);
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => saveToSlot(id)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-primary/5 border-2 border-transparent hover:border-primary/20 rounded-xl text-xs font-semibold text-slate-700 transition-all"
+                      >
+                        <span>Custom {id}</span>
+                        {existing
+                          ? <span className="text-[10px] text-slate-400 font-normal">Overwrite</span>
+                          : <span className="text-[10px] text-primary font-normal">Empty</span>
+                        }
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setShowSlotPicker(false)}
+                  className="w-full py-2 text-slate-400 text-xs font-semibold hover:text-slate-600 transition-colors"
+                >
+                  ← Back
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

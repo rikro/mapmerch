@@ -29,6 +29,13 @@ const presets: Record<StyleName, StylePreset> = {
     strokeWidth: 6,
     padding: 120,
   },
+  'custom': {
+    name: 'custom',
+    backgroundColor: '#f0f0f0',
+    strokeColor: '#6b7280',
+    strokeWidth: 3,
+    padding: 120,
+  },
 };
 
 export function getStylePreset(style: StyleName): StylePreset {

@@ -1,10 +1,11 @@
 import { StyleOption, ProductOption, StreetGroupId, StreetConfig } from './types.js';
 
 export const STYLE_OPTIONS: StyleOption[] = [
-  { name: 'minimal-line-art', label: 'Minimal', backgroundColor: '#ffffff', strokeColor: '#000000' },
-  { name: 'blueprint',        label: 'Blueprint', backgroundColor: '#1a3a5c', strokeColor: '#a8c8f0' },
+  { name: 'minimal-line-art', label: 'Minimal',    backgroundColor: '#ffffff', strokeColor: '#000000' },
+  { name: 'blueprint',        label: 'Blueprint',  backgroundColor: '#1a3a5c', strokeColor: '#a8c8f0' },
   { name: 'watercolor-wash',  label: 'Watercolor', backgroundColor: '#f5f0e8', strokeColor: '#8b6f47' },
-  { name: 'bold-graphic',     label: 'Bold',      backgroundColor: '#1a1a1a', strokeColor: '#f5c518' },
+  { name: 'bold-graphic',     label: 'Bold',       backgroundColor: '#1a1a1a', strokeColor: '#f5c518' },
+  { name: 'custom',           label: 'Custom',     backgroundColor: '#f0f0f0', strokeColor: '#6b7280' },
 ];
 
 export const PRODUCT_OPTIONS: ProductOption[] = [

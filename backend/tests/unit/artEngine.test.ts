@@ -207,11 +207,11 @@ describe('generateSvg with drawn polygon (land/water/clip)', () => {
     expect(svg).toContain('fill="#ffffff"'); // minimal-line-art backgroundColor
   });
 
-  it('old signature (no polygon) still works — no clipPath, no canvas-bg/water-bg', () => {
+  it('old signature (no polygon) still works — no clipPath, no water-bg', () => {
     const svg = generateSvg(sampleStreetData, 'minimal-line-art');
     expect(svg).toContain('<svg');
     expect(svg).not.toContain('<clipPath');
-    expect(svg).not.toContain('canvas-bg');
+    expect(svg).toContain('canvas-bg');
     expect(svg).not.toContain('water-bg');
   });
 });

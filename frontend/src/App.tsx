@@ -69,6 +69,8 @@ function applyStreetStyle(
   labelTypography: TypographyConfig,
   waterColor: string,
   boundary: BoundaryConfig,
+  backgroundColor: string,
+  strokeColor: string,
 ): string | null {
   if (!rawSvg) return null;
 
@@ -78,7 +80,8 @@ function applyStreetStyle(
       const s = config.groupStyles[g.id];
       const dash = DASH_ARRAYS[s.dashStyle];
       const dashRule = dash ? `stroke-dasharray:${dash};` : '';
-      const colorRule = s.color ? `stroke:${s.color};` : '';
+      // Use explicit override if set, otherwise fall back to the theme's stroke color
+      const colorRule = `stroke:${s.color ?? strokeColor};`;
       return `path.road-${g.id}{stroke-width:${s.strokeWidth};${dashRule}${colorRule}}`;
     })
     .join('');
@@ -94,16 +97,15 @@ function applyStreetStyle(
     ? `path.boundary-border{stroke:${boundary.borderColor};stroke-width:${boundary.borderWeight};}`
     : `path.boundary-border{display:none;}`;
 
-  const style = `<style>rect.water-bg{fill:${waterColor};}path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}${borderRule}</style>`;
+  const style = `<style>rect.canvas-bg{fill:${backgroundColor};}path.land-body{fill:${backgroundColor};}rect.water-bg{fill:${waterColor};}path.water-body{fill:${waterColor};}${groupRules}text{${textRules};}${borderRule}</style>`;
   return rawSvg.replace(/(<svg[^>]*>)/, `$1${style}`);
 }
 
-const COORD_POSITION_CLASSES: Record<CoordPosition, string> = {
-  'top-left':     'top-5 left-5',
-  'top-right':    'top-5 right-5',
-  'bottom-left':  'bottom-5 left-5',
-  'bottom-right': 'bottom-5 right-5',
-};
+// When coords and title share the same side, push coords inward to clear the title block.
+// Title uses py-4 (~16px each side) + font height ~18px = ~50px total; 64px gives safe clearance.
+function coordEdgeOffset(coordPos: CoordPosition, titlePos: 'top' | 'bottom', hasTitleText: boolean): number {
+  return hasTitleText && coordPos === titlePos ? 64 : 20;
+}
 
 function SymbolOverlay({ icon, scale, color, opacity }: { icon: SymbolIcon; scale: number; color: string; opacity: number }) {
   const props = { style: { width: scale, height: scale, color, opacity } };
@@ -140,12 +142,17 @@ export default function App() {
     typeface: 'sans-serif', size: 40, weight: '400', color: '', baselineOffset: 12,
   });
   const [coordsConfig, setCoordsConfig] = useState<CoordsConfig>({
-    show: false, format: 'Decimal Degrees', position: 'bottom-left', opacity: 0.85,
+    show: false, format: 'Decimal Degrees', position: 'bottom', opacity: 0.85,
   });
   const [symbolConfig, setSymbolConfig] = useState<SymbolConfig>({
     show: false, icon: 'heart', scale: 48, color: '#0050cb', opacity: 1,
   });
   const [waterColor, setWaterColor] = useState('#bfbfbf');
+  const [landColor, setLandColor] = useState(''); // empty = follows active theme backgroundColor
+  const [titlePosition, setTitlePosition] = useState<'top' | 'bottom'>('bottom');
+  const [coordTypography, setCoordTypography] = useState<TypographyConfig>({
+    typeface: 'Space Mono', size: 11, weight: '700', color: '',
+  });
   const [boundaryConfig, setBoundaryConfig] = useState<BoundaryConfig>({
     clip: true, border: false, borderWeight: 2, borderColor: '#1c1b1b',
   });
@@ -198,12 +205,20 @@ export default function App() {
   const handleStyleChange = useCallback(
     (newStyle: StyleName) => {
       setStyle(newStyle);
-      if (polygon) {
-        const { highwayTypes, groupMap } = resolvedStreetArgs(streetConfig);
-        generate(polygon, newStyle, highwayTypes, labelTypography.baselineOffset ?? 12, groupMap, boundaryConfig.clip);
-      }
+      setLandColor('');
     },
-    [generate, polygon, streetConfig, labelTypography.baselineOffset],
+    [],
+  );
+
+  const handleApplyDesignPreset = useCallback(
+    (presetStyle: StyleName, presetStreetConfig: StreetConfig, presetWaterColor: string, presetBoundaryConfig: BoundaryConfig, presetLandColor: string) => {
+      setStyle(presetStyle);
+      setStreetConfig(presetStreetConfig);
+      setWaterColor(presetWaterColor);
+      setLandColor(presetLandColor);
+      setBoundaryConfig(presetBoundaryConfig);
+    },
+    [],
   );
 
   const handleStreetConfigChange = useCallback(
@@ -307,7 +322,9 @@ export default function App() {
   const currentProductOption = PRODUCT_OPTIONS.find((o) => o.type === product)!;
   const priceCents = currentProductOption.retailPriceCents[size];
   const center = polygon ? polygonCenter(polygon) : null;
-  const displaySvg = applyStreetStyle(svg, streetConfig, labelTypography, waterColor, boundaryConfig);
+  const activeStyleOption = STYLE_OPTIONS.find(o => o.name === style) ?? STYLE_OPTIONS[0];
+  const effectiveLandColor = landColor || activeStyleOption.backgroundColor;
+  const displaySvg = applyStreetStyle(svg, streetConfig, labelTypography, waterColor, boundaryConfig, effectiveLandColor, activeStyleOption.strokeColor);
 
   return (
     <Layout step={step} onStepChange={setStep}>
@@ -450,12 +467,15 @@ export default function App() {
               {/* Coordinates overlay */}
               {coordsConfig.show && center && (
                 <div
-                  className={cn(
-                    'absolute z-20 px-3 py-1.5 rounded-full text-[10px] font-mono font-bold tracking-wider',
-                    'bg-white/80 backdrop-blur-sm border border-white/40',
-                    COORD_POSITION_CLASSES[coordsConfig.position],
-                  )}
-                  style={{ opacity: coordsConfig.opacity }}
+                  className="absolute z-20 px-3 py-1.5 rounded-full tracking-wider bg-white/80 backdrop-blur-sm border border-white/40 left-1/2 -translate-x-1/2"
+                  style={{
+                    [coordsConfig.position]: coordEdgeOffset(coordsConfig.position, titlePosition, !!mapTitle),
+                    opacity: coordsConfig.opacity,
+                    fontFamily: `${coordTypography.typeface}, monospace`,
+                    fontSize: coordTypography.size,
+                    fontWeight: coordTypography.weight,
+                    color: coordTypography.color || undefined,
+                  }}
                 >
                   {formatCoords(center.lat, center.lng, coordsConfig.format)}
                 </div>
@@ -476,7 +496,7 @@ export default function App() {
               {/* Title overlay */}
               {mapTitle && (
                 <div
-                  className="absolute bottom-0 left-0 right-0 px-6 py-4 z-20 text-center"
+                  className={cn('absolute left-0 right-0 px-6 py-4 z-20 text-center', titlePosition === 'top' ? 'top-0' : 'bottom-0')}
                   style={{
                     fontFamily: typography.typeface,
                     fontSize: typography.size,
@@ -497,6 +517,7 @@ export default function App() {
             styleOptions={STYLE_OPTIONS}
             selectedStyle={style}
             onStyleChange={handleStyleChange}
+            onApplyDesignPreset={handleApplyDesignPreset}
             streetConfig={streetConfig}
             onStreetConfigChange={handleStreetConfigChange}
             mapTitle={mapTitle}
@@ -506,11 +527,17 @@ export default function App() {
             labelTypography={labelTypography}
             onLabelTypographyChange={handleLabelTypographyChange}
             coordsConfig={coordsConfig}
+            titlePosition={titlePosition}
+            onTitlePositionChange={setTitlePosition}
+            coordTypography={coordTypography}
+            onCoordTypographyChange={(patch) => setCoordTypography(t => ({ ...t, ...patch }))}
             onCoordsConfigChange={(patch) => setCoordsConfig((c) => ({ ...c, ...patch }))}
             symbolConfig={symbolConfig}
             onSymbolConfigChange={(patch) => setSymbolConfig((s) => ({ ...s, ...patch }))}
             waterColor={waterColor}
             onWaterColorChange={setWaterColor}
+            landColor={landColor}
+            onLandColorChange={setLandColor}
             boundaryConfig={boundaryConfig}
             onBoundaryConfigChange={handleBoundaryConfigChange}
             svg={displaySvg}

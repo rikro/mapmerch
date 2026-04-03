@@ -2,7 +2,8 @@ export type StyleName =
   | 'minimal-line-art'
   | 'blueprint'
   | 'watercolor-wash'
-  | 'bold-graphic';
+  | 'bold-graphic'
+  | 'custom';
 
 export type ProductType = 'print' | 'poster' | 'canvas';
 
@@ -35,7 +36,7 @@ export interface TypographyConfig {
   baselineOffset?: number; // px lift above the street line via CSS translateY; only used for street labels
 }
 
-export type CoordPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type CoordPosition = 'top' | 'bottom';
 export type CoordFormat = 'Decimal Degrees' | 'DMS';
 
 export interface CoordsConfig {
@@ -74,6 +75,16 @@ export interface BoundaryConfig {
   border: boolean;
   borderWeight: number;
   borderColor: string;
+}
+
+export interface CustomSlot {
+  id: 1 | 2 | 3;
+  label: string;
+  baseStyle: StyleName;
+  streetConfig: StreetConfig;
+  waterColor: string;
+  landColor: string;
+  boundaryConfig: BoundaryConfig;
 }
 
 export interface ShippingAddress {
