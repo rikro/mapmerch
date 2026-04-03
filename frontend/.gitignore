@@ -1,0 +1,8 @@
+dist/
+node_modules/
+test-results/
+
+# Prevent tsc from polluting src/ with compiled output
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
